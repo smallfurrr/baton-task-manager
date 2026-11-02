@@ -1,9 +1,9 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { Developer, Skill, Task } from "../api/types";
-import { jsonResponse, mockApi } from "../test/fetch";
-import { renderWithProviders } from "../test/render";
+import type { Developer, Skill, Task } from "../../api/types";
+import { jsonResponse, mockApi } from "../../test/fetch";
+import { renderWithProviders } from "../../test/render";
 import { TaskListPage } from "./TaskListPage";
 
 const frontend: Skill = { id: 1, name: "Frontend" };

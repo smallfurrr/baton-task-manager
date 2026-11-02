@@ -1,4 +1,4 @@
-import type { Developer, Task, UpdateTaskInput } from "../api/types";
+import type { Developer, Task, UpdateTaskInput } from "../../api/types";
 import { TaskRow } from "./TaskRow";
 import styles from "./TaskTable.module.css";
 

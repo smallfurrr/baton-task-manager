@@ -1,7 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import styles from "./App.module.css";
-import { TaskCreatePage } from "./pages/TaskCreatePage";
-import { TaskListPage } from "./pages/TaskListPage";
+import { TaskCreatePage } from "./pages/TaskCreatePage/TaskCreatePage";
+import { TaskListPage } from "./pages/TaskListPage/TaskListPage";
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   return [styles.navLink, isActive && styles.navLinkActive].filter(Boolean).join(" ");

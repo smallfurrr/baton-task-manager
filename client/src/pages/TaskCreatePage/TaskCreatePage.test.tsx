@@ -1,10 +1,10 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
-import type { Skill, Task } from "../api/types";
-import { jsonResponse, mockApi } from "../test/fetch";
-import { renderWithProviders } from "../test/render";
+import { App } from "../../App";
+import type { Skill, Task } from "../../api/types";
+import { jsonResponse, mockApi } from "../../test/fetch";
+import { renderWithProviders } from "../../test/render";
 
 const skills: Skill[] = [
   { id: 1, name: "Frontend" },

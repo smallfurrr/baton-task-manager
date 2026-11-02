@@ -1,4 +1,4 @@
-import type { Developer } from "../api/types";
+import type { Developer } from "../../api/types";
 import styles from "./Select.module.css";
 
 interface AssigneeSelectProps {

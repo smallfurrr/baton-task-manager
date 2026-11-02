@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Developer, Skill, Task } from "../api/types";
+import type { Developer, Skill, Task } from "../../api/types";
 import { TaskTable } from "./TaskTable";
 
 const frontend: Skill = { id: 1, name: "Frontend" };

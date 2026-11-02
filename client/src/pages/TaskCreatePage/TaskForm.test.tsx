@@ -1,8 +1,8 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Skill } from "../api/types";
-import { renderWithProviders } from "../test/render";
+import type { Skill } from "../../api/types";
+import { renderWithProviders } from "../../test/render";
 import { TaskForm } from "./TaskForm";
 
 const skills: Skill[] = [

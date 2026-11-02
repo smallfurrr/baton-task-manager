@@ -1,5 +1,5 @@
-import type { Developer, Task, UpdateTaskInput } from "../api/types";
-import { eligibleDevelopers } from "../lib/eligibleDevelopers";
+import type { Developer, Task, UpdateTaskInput } from "../../api/types";
+import { eligibleDevelopers } from "../../lib/eligibleDevelopers";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { StatusSelect } from "./StatusSelect";
 
