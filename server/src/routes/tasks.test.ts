@@ -643,3 +643,37 @@ describe("PATCH /api/tasks/:id: Done rule", () => {
     expect(accepted.body.assignee.name).toBe("Dave");
   });
 });
+
+describe("PATCH /api/tasks/:id: reopening Done ancestors", () => {
+  const post = (body: object) => request(app).post("/api/tasks").send(body);
+  const patch = (id: number, body: object) => request(app).patch(`/api/tasks/${id}`).send(body);
+
+  it("reopens a Done parent when a subtask is reopened, and the list shows it", async () => {
+    const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
+    const child = root.subtasks[0];
+    await patch(child.id, { status: "done" });
+    expect((await patch(root.id, { status: "done" })).status).toBe(200);
+
+    const res = await patch(child.id, { status: "in_progress" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: child.id, status: "in_progress" });
+    const list = (await request(app).get("/api/tasks")).body;
+    expect(list[0]).toMatchObject({ id: root.id, status: "in_progress" });
+    expect(list[0].subtasks[0]).toMatchObject({ id: child.id, status: "in_progress" });
+  });
+
+  it("reopens grandparents too", async () => {
+    const root = (await post({ title: "root", subtasks: [{ title: "mid", subtasks: [{ title: "leaf" }] }] })).body;
+    const mid = root.subtasks[0];
+    const leaf = mid.subtasks[0];
+    for (const id of [leaf.id, mid.id, root.id]) expect((await patch(id, { status: "done" })).status).toBe(200);
+
+    await patch(leaf.id, { status: "todo" });
+
+    const after = (await request(app).get(`/api/tasks/${root.id}`)).body;
+    expect(after.status).toBe("in_progress");
+    expect(after.subtasks[0].status).toBe("in_progress");
+    expect(after.subtasks[0].subtasks[0].status).toBe("todo");
+  });
+});

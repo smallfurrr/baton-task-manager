@@ -110,3 +110,22 @@ export async function updateTask(db: Queryable, taskId: number, changes: TaskCha
     ],
   );
 }
+
+/**
+ * Move every Done ancestor of the task (parent, grandparent, ...) back to In
+ * progress, whatever the status of the ancestors between. Returns the ids reopened.
+ */
+export async function reopenDoneAncestors(db: Queryable, taskId: number): Promise<number[]> {
+  const { rows } = await db.query<{ id: number }>(
+    `WITH RECURSIVE ancestors AS (
+       SELECT parent_id AS id FROM tasks WHERE id = $1 AND parent_id IS NOT NULL
+       UNION ALL
+       SELECT t.parent_id FROM tasks t JOIN ancestors a ON t.id = a.id WHERE t.parent_id IS NOT NULL
+     )
+     UPDATE tasks SET status = 'in_progress', updated_at = now()
+     WHERE id IN (SELECT id FROM ancestors) AND status = 'done'
+     RETURNING id`,
+    [taskId],
+  );
+  return rows.map((row) => row.id);
+}

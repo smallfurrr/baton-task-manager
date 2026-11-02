@@ -132,30 +132,30 @@ describe("assignTask: other cases", () => {
   });
 });
 
+type Node = { title: string; subtasks?: Node[] };
+
+/** Create a tree and return a lookup from title to id. */
+async function createTree(root: Node): Promise<Record<string, number>> {
+  const created = await createTask({ title: root.title, skillIds: [], subtasks: toInput(root.subtasks) });
+  const ids: Record<string, number> = {};
+  (function walk(task: { id: number; title: string; subtasks: unknown[] }) {
+    ids[task.title] = task.id;
+    (task.subtasks as (typeof task)[]).forEach(walk);
+  })(created);
+  return ids;
+}
+
+function toInput(nodes: Node[] = []): { title: string; skillIds: number[]; subtasks: ReturnType<typeof toInput> }[] {
+  return nodes.map((node) => ({ title: node.title, skillIds: [], subtasks: toInput(node.subtasks) }));
+}
+
+const setStatus = (id: number, status: "todo" | "in_progress" | "done") => updateTask(id, { status });
+
+async function statusOf(id: number): Promise<string> {
+  return (await getTask(id)).status;
+}
+
 describe("updateTask: Done rule", () => {
-  type Node = { title: string; subtasks?: Node[] };
-
-  /** Create a tree and return a lookup from title to id. */
-  async function createTree(root: Node): Promise<Record<string, number>> {
-    const created = await createTask({ title: root.title, skillIds: [], subtasks: toInput(root.subtasks) });
-    const ids: Record<string, number> = {};
-    (function walk(task: { id: number; title: string; subtasks: unknown[] }) {
-      ids[task.title] = task.id;
-      (task.subtasks as (typeof task)[]).forEach(walk);
-    })(created);
-    return ids;
-  }
-
-  function toInput(nodes: Node[] = []): { title: string; skillIds: number[]; subtasks: ReturnType<typeof toInput> }[] {
-    return nodes.map((node) => ({ title: node.title, skillIds: [], subtasks: toInput(node.subtasks) }));
-  }
-
-  const setStatus = (id: number, status: "todo" | "in_progress" | "done") => updateTask(id, { status });
-
-  async function statusOf(id: number): Promise<string> {
-    return (await getTask(id)).status;
-  }
-
   it("lets a task with no subtasks become Done", async () => {
     const { solo } = await createTree({ title: "solo" });
 
@@ -281,5 +281,157 @@ describe("updateTask: Done rule", () => {
 
     await expect(assignTask(subtask.id, await idOf("developers", "Alice"))).rejects.toBeInstanceOf(SkillMismatchError);
     expect((await assignTask(subtask.id, await idOf("developers", "Bob"))).assignee?.name).toBe("Bob");
+  });
+});
+
+describe("updateTask: reopening Done ancestors", () => {
+  /** Set statuses directly in SQL, to build a starting state without going through the rules. */
+  async function force(status: "todo" | "in_progress" | "done", ...ids: number[]): Promise<void> {
+    await getPool().query("UPDATE tasks SET status = $1 WHERE id = ANY($2::int[])", [status, ids]);
+  }
+
+  async function touchedSinceCreation(id: number): Promise<boolean> {
+    const { rows } = await getPool().query<{ touched: boolean }>(
+      "SELECT updated_at > created_at AS touched FROM tasks WHERE id = $1",
+      [id],
+    );
+    return rows[0]!.touched;
+  }
+
+  it.each(["in_progress", "todo"] as const)("reopens a Done parent when its subtask is set to %s", async (status) => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    await force("done", ids.root!, ids.child!);
+
+    await setStatus(ids.child!, status);
+
+    expect(await statusOf(ids.child!)).toBe(status);
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+  });
+
+  it("reopens every Done ancestor up the tree", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "a", subtasks: [{ title: "a1", subtasks: [{ title: "a1x" }] }] }],
+    });
+    await force("done", ids.root!, ids.a!, ids.a1!, ids.a1x!);
+
+    await setStatus(ids.a1x!, "in_progress");
+
+    expect(await statusOf(ids.a1!)).toBe("in_progress");
+    expect(await statusOf(ids.a!)).toBe("in_progress");
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+  });
+
+  it("keeps walking up past an ancestor that is not Done", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "mid", subtasks: [{ title: "leaf" }] }],
+    });
+    await force("done", ids.root!, ids.leaf!);
+    await force("in_progress", ids.mid!); // an inconsistent starting state
+
+    await setStatus(ids.leaf!, "todo");
+
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+    expect(await statusOf(ids.mid!)).toBe("in_progress");
+  });
+
+  it("leaves ancestors that are To-do or In progress as they are", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "mid", subtasks: [{ title: "leaf" }] }],
+    });
+    await force("done", ids.leaf!);
+    await force("in_progress", ids.mid!);
+
+    await setStatus(ids.leaf!, "todo");
+
+    expect(await statusOf(ids.mid!)).toBe("in_progress");
+    expect(await statusOf(ids.root!)).toBe("todo");
+  });
+
+  it("does not touch siblings, descendants or unrelated tasks", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "a", subtasks: [{ title: "a1" }] }, { title: "b" }],
+    });
+    const other = await createTree({ title: "other tree", subtasks: [{ title: "other child" }] });
+    await force("done", ids.root!, ids.a!, ids.a1!, ids.b!, other["other tree"]!, other["other child"]!);
+
+    await setStatus(ids.a!, "in_progress");
+
+    expect(await statusOf(ids.a!)).toBe("in_progress");
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+    expect(await statusOf(ids.a1!)).toBe("done"); // descendant
+    expect(await statusOf(ids.b!)).toBe("done"); // sibling
+    expect(await statusOf(other["other tree"]!)).toBe("done");
+    expect(await statusOf(other["other child"]!)).toBe("done");
+  });
+
+  it("updates only the reopened ancestors' updatedAt", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "a" }, { title: "b" }] });
+    await force("done", ids.root!, ids.a!, ids.b!);
+
+    await setStatus(ids.a!, "todo");
+
+    expect(await touchedSinceCreation(ids.root!)).toBe(true);
+    expect(await touchedSinceCreation(ids.b!)).toBe(false);
+  });
+
+  it("never cascades when a task is set to Done", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "mid", subtasks: [{ title: "leaf" }] }] });
+
+    await setStatus(ids.leaf!, "done");
+
+    expect(await statusOf(ids.mid!)).toBe("todo");
+    expect(await statusOf(ids.root!)).toBe("todo");
+  });
+
+  it("does nothing for a task with no parent, or when the ancestors are not Done", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+
+    await expect(setStatus(ids.root!, "in_progress")).resolves.toMatchObject({ status: "in_progress" });
+    await expect(setStatus(ids.child!, "in_progress")).resolves.toMatchObject({ status: "in_progress" });
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+  });
+
+  it("does not reopen anything on an assignment-only change", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    await force("done", ids.root!, ids.child!);
+
+    await updateTask(ids.child!, { assigneeId: await idOf("developers", "Alice") });
+
+    expect(await statusOf(ids.root!)).toBe("done");
+  });
+
+  it("rolls the cascade back when the same request's assignment is rejected", async () => {
+    const backend = await idOf("skills", "Backend");
+    const root = await createTask({
+      title: "root",
+      skillIds: [],
+      subtasks: [{ title: "api", skillIds: [backend] }],
+    });
+    const child = root.subtasks[0]!;
+    await force("done", root.id, child.id);
+
+    await expect(
+      updateTask(child.id, { status: "in_progress", assigneeId: await idOf("developers", "Alice") }),
+    ).rejects.toBeInstanceOf(SkillMismatchError);
+
+    expect(await statusOf(child.id)).toBe("done");
+    expect(await statusOf(root.id)).toBe("done");
+  });
+
+  it("keeps the whole tree consistent: reopening forces the parent to wait for the child again", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    await setStatus(ids.child!, "done");
+    await setStatus(ids.root!, "done");
+
+    await setStatus(ids.child!, "in_progress"); // reopen: parent is reopened too
+
+    expect(await statusOf(ids.root!)).toBe("in_progress");
+    await expect(setStatus(ids.root!, "done")).rejects.toBeInstanceOf(IncompleteSubtasksError);
+    await setStatus(ids.child!, "done");
+    expect((await setStatus(ids.root!, "done")).status).toBe("done");
   });
 });

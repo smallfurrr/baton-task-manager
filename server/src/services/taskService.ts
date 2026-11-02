@@ -78,6 +78,7 @@ export interface UpdateTaskInput {
  *   skill the task requires;
  * - the Done rule: a task can only become Done if every one of its descendants
  *   is already Done.
+ * Setting a task to To-do or In progress also reopens its Done ancestors.
  */
 export async function updateTask(taskId: number, changes: UpdateTaskInput): Promise<Task> {
   await withTransaction(async (client) => {
@@ -99,6 +100,12 @@ export async function updateTask(taskId: number, changes: UpdateTaskInput): Prom
     }
 
     await tasks.updateTask(client, taskId, changes);
+
+    // Moving a task out of Done reopens every Done ancestor, so "Done" never
+    // sits above unfinished work. Ancestors that are To-do or In progress stay as they are.
+    if (changes.status === "todo" || changes.status === "in_progress") {
+      await tasks.reopenDoneAncestors(client, taskId);
+    }
   });
 
   return getTask(taskId);
