@@ -1,14 +1,13 @@
 import { z } from "zod";
 import { ValidationError } from "./errors.js";
 
-export const POSTGRES_INT_MAX = 2_147_483_647;
+const POSTGRES_INT_MAX = 2_147_483_647;
 
-/** A positive integer id as it appears in a URL path segment. */
-const idSchema = z
-  .string()
-  .regex(/^\d+$/, "must be a positive integer")
-  .transform(Number)
-  .pipe(z.number().int().min(1).max(POSTGRES_INT_MAX));
+/** A positive integer that fits in a Postgres `integer` column, so it can never cause a database range error. */
+export const idNumberSchema = z.number().int().min(1).max(POSTGRES_INT_MAX);
+
+/** The same id as it appears in a URL path segment. */
+const idSchema = z.string().regex(/^\d+$/, "must be a positive integer").transform(Number).pipe(idNumberSchema);
 
 export function parseId(value: unknown, name = "id"): number {
   const result = idSchema.safeParse(value);

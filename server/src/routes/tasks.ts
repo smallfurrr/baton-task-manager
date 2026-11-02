@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import * as taskService from "../services/taskService.js";
-import { parseBody, parseId, POSTGRES_INT_MAX } from "../validation.js";
+import { idNumberSchema, parseBody, parseId } from "../validation.js";
 
 export const tasksRouter = Router();
 
@@ -12,7 +12,7 @@ const createTaskSchema = z
       .trim()
       .min(1, "title must not be empty")
       .max(500, "title must be at most 500 characters"),
-    skillIds: z.array(z.number().int().min(1).max(POSTGRES_INT_MAX)).default([]),
+    skillIds: z.array(idNumberSchema).default([]),
   })
   .strict();
 
