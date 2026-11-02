@@ -45,3 +45,26 @@ export class SkillMismatchError extends AppError {
     this.name = "SkillMismatchError";
   }
 }
+
+export interface OpenSubtask {
+  id: number;
+  title: string;
+  status: string;
+}
+
+const TITLES_IN_MESSAGE = 3;
+
+/** The task cannot be marked Done because some subtask beneath it is not Done. */
+export class IncompleteSubtasksError extends AppError {
+  constructor(openSubtasks: readonly OpenSubtask[]) {
+    const titles = openSubtasks.slice(0, TITLES_IN_MESSAGE).map((subtask) => subtask.title);
+    const more = openSubtasks.length - titles.length;
+    super(
+      409,
+      "INCOMPLETE_SUBTASKS",
+      `Cannot mark task Done: ${openSubtasks.length} subtask(s) are not Done (${titles.join(", ")}${more > 0 ? `, +${more} more` : ""})`,
+      { openSubtasks },
+    );
+    this.name = "IncompleteSubtasksError";
+  }
+}

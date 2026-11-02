@@ -566,3 +566,80 @@ describe("POST /api/tasks with subtasks", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("PATCH /api/tasks/:id: Done rule", () => {
+  const post = (body: object) => request(app).post("/api/tasks").send(body);
+  const patch = (id: number, body: object) => request(app).patch(`/api/tasks/${id}`).send(body);
+
+  it("returns 409 INCOMPLETE_SUBTASKS listing what is still open, and leaves the task unchanged", async () => {
+    const root = (await post({ title: "root", subtasks: [{ title: "Write tests" }, { title: "Deploy" }] })).body;
+
+    const res = await patch(root.id, { status: "done" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("INCOMPLETE_SUBTASKS");
+    expect(res.body.error.message).toBe("Cannot mark task Done: 2 subtask(s) are not Done (Write tests, Deploy)");
+    expect(res.body.error.details.openSubtasks).toEqual([
+      { id: root.subtasks[0].id, title: "Write tests", status: "todo" },
+      { id: root.subtasks[1].id, title: "Deploy", status: "todo" },
+    ]);
+    expect((await request(app).get(`/api/tasks/${root.id}`)).body.status).toBe("todo");
+  });
+
+  it("allows Done on a task with no subtasks", async () => {
+    const task = (await post({ title: "solo" })).body;
+
+    const res = await patch(task.id, { status: "done" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("done");
+  });
+
+  it("allows Done once every level beneath is Done, completed bottom-up", async () => {
+    const root = (
+      await post({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "grandchild" }] }] })
+    ).body;
+    const child = root.subtasks[0];
+    const grandchild = child.subtasks[0];
+
+    expect((await patch(root.id, { status: "done" })).status).toBe(409);
+    expect((await patch(child.id, { status: "done" })).status).toBe(409);
+    expect((await patch(grandchild.id, { status: "done" })).status).toBe(200);
+    expect((await patch(child.id, { status: "done" })).status).toBe(200);
+    const final = await patch(root.id, { status: "done" });
+
+    expect(final.status).toBe(200);
+    expect(final.body.status).toBe("done");
+    expect(final.body.subtasks[0].subtasks[0].status).toBe("done");
+  });
+
+  it("allows In progress and To-do on a task whose subtasks are not Done", async () => {
+    const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
+
+    expect((await patch(root.id, { status: "in_progress" })).status).toBe(200);
+    expect((await patch(root.id, { status: "todo" })).status).toBe(200);
+  });
+
+  it("returns 409 for the blocked status even when combined with a valid assignment, applying neither", async () => {
+    const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
+
+    const res = await patch(root.id, { status: "done", assigneeId: await idOf("developers", "Carol") });
+
+    expect(res.status).toBe(409);
+    const after = (await request(app).get(`/api/tasks/${root.id}`)).body;
+    expect(after).toMatchObject({ status: "todo", assignee: null });
+  });
+
+  it("applies the skill rule to a subtask", async () => {
+    const backend = await idOf("skills", "Backend");
+    const root = (await post({ title: "root", subtasks: [{ title: "api", skillIds: [backend] }] })).body;
+
+    const rejected = await patch(root.subtasks[0].id, { assigneeId: await idOf("developers", "Alice") });
+    const accepted = await patch(root.subtasks[0].id, { assigneeId: await idOf("developers", "Dave") });
+
+    expect(rejected.status).toBe(409);
+    expect(rejected.body.error.code).toBe("SKILL_MISMATCH");
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.assignee.name).toBe("Dave");
+  });
+});

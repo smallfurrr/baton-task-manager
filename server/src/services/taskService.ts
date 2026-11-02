@@ -1,5 +1,5 @@
 import { getPool, withTransaction } from "../db/pool.js";
-import { InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
+import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
@@ -73,8 +73,11 @@ export interface UpdateTaskInput {
 
 /**
  * Change a task's status and/or assignee in one transaction, so a rejected
- * change leaves the task untouched. Enforces the skill rule whenever an
- * assignee is set: the developer must hold every skill the task requires.
+ * change leaves the task untouched. Enforces two rules:
+ * - the skill rule whenever an assignee is set: the developer must hold every
+ *   skill the task requires;
+ * - the Done rule: a task can only become Done if every one of its descendants
+ *   is already Done.
  */
 export async function updateTask(taskId: number, changes: UpdateTaskInput): Promise<Task> {
   await withTransaction(async (client) => {
@@ -88,6 +91,11 @@ export async function updateTask(taskId: number, changes: UpdateTaskInput): Prom
 
       const missing = missingSkills(task.skills, developer.skills);
       if (missing.length > 0) throw new SkillMismatchError(developer.name, missing);
+    }
+
+    if (changes.status === "done") {
+      const open = await tasks.findOpenDescendants(client, taskId);
+      if (open.length > 0) throw new IncompleteSubtasksError(open);
     }
 
     await tasks.updateTask(client, taskId, changes);

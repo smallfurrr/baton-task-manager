@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
-import { InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
+import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
 import { resetDatabase } from "../test/db.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
 
@@ -129,5 +129,157 @@ describe("assignTask: other cases", () => {
     const task = await assignTask(taskId, await idOf("developers", "Bob"));
 
     expect(task.status).toBe("in_progress");
+  });
+});
+
+describe("updateTask: Done rule", () => {
+  type Node = { title: string; subtasks?: Node[] };
+
+  /** Create a tree and return a lookup from title to id. */
+  async function createTree(root: Node): Promise<Record<string, number>> {
+    const created = await createTask({ title: root.title, skillIds: [], subtasks: toInput(root.subtasks) });
+    const ids: Record<string, number> = {};
+    (function walk(task: { id: number; title: string; subtasks: unknown[] }) {
+      ids[task.title] = task.id;
+      (task.subtasks as (typeof task)[]).forEach(walk);
+    })(created);
+    return ids;
+  }
+
+  function toInput(nodes: Node[] = []): { title: string; skillIds: number[]; subtasks: ReturnType<typeof toInput> }[] {
+    return nodes.map((node) => ({ title: node.title, skillIds: [], subtasks: toInput(node.subtasks) }));
+  }
+
+  const setStatus = (id: number, status: "todo" | "in_progress" | "done") => updateTask(id, { status });
+
+  async function statusOf(id: number): Promise<string> {
+    return (await getTask(id)).status;
+  }
+
+  it("lets a task with no subtasks become Done", async () => {
+    const { solo } = await createTree({ title: "solo" });
+
+    expect((await setStatus(solo!, "done")).status).toBe("done");
+  });
+
+  it("lets a task become Done once all its subtasks are Done, working bottom-up", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "a", subtasks: [{ title: "a1" }] }, { title: "b" }],
+    });
+
+    await setStatus(ids.a1!, "done");
+    await setStatus(ids.a!, "done");
+    await setStatus(ids.b!, "done");
+    const root = await setStatus(ids.root!, "done");
+
+    expect(root.status).toBe("done");
+  });
+
+  it("rejects Done while a direct subtask is not Done, naming it", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "Write tests" }] });
+
+    const error = await setStatus(ids.root!, "done").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(IncompleteSubtasksError);
+    expect((error as IncompleteSubtasksError).message).toContain("1 subtask(s)");
+    expect((error as IncompleteSubtasksError).message).toContain("Write tests");
+    expect(await statusOf(ids.root!)).toBe("todo");
+  });
+
+  it("rejects Done while a deeper descendant is not Done, even if its parent is Done", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "child", subtasks: [{ title: "grandchild" }] }],
+    });
+    // Put the tree in an inconsistent state directly, bypassing the service.
+    await getPool().query("UPDATE tasks SET status = 'done' WHERE id = $1", [ids.child]);
+
+    const error = await setStatus(ids.root!, "done").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(IncompleteSubtasksError);
+    expect((error as IncompleteSubtasksError).details).toEqual({
+      openSubtasks: [{ id: ids.grandchild, title: "grandchild", status: "todo" }],
+    });
+  });
+
+  it("counts every open descendant, in creation order, and treats In progress as not Done", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: [{ title: "a", subtasks: [{ title: "a1" }] }, { title: "b" }],
+    });
+    await setStatus(ids.b!, "in_progress");
+
+    const error = (await setStatus(ids.root!, "done").catch((e: unknown) => e)) as IncompleteSubtasksError;
+
+    expect(error.message).toContain("3 subtask(s)");
+    expect((error.details as { openSubtasks: { title: string }[] }).openSubtasks.map((s) => s.title)).toEqual([
+      "a",
+      "a1",
+      "b",
+    ]);
+  });
+
+  it("shortens the message when many subtasks are open, but lists them all in the details", async () => {
+    const ids = await createTree({
+      title: "root",
+      subtasks: ["s1", "s2", "s3", "s4", "s5"].map((title) => ({ title })),
+    });
+
+    const error = (await setStatus(ids.root!, "done").catch((e: unknown) => e)) as IncompleteSubtasksError;
+
+    expect(error.message).toBe("Cannot mark task Done: 5 subtask(s) are not Done (s1, s2, s3, +2 more)");
+    expect((error.details as { openSubtasks: unknown[] }).openSubtasks).toHaveLength(5);
+  });
+
+  it("does not stop a task with open subtasks from being To-do or In progress", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+
+    expect((await setStatus(ids.root!, "in_progress")).status).toBe("in_progress");
+    expect((await setStatus(ids.root!, "todo")).status).toBe("todo");
+  });
+
+  it("lets a subtask become Done while its parent is still open", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+
+    expect((await setStatus(ids.child!, "done")).status).toBe("done");
+    expect(await statusOf(ids.root!)).toBe("todo");
+  });
+
+  it("rejects the whole change when the status is blocked, so a valid assignee is not applied either", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    const carol = await idOf("developers", "Carol");
+
+    await expect(updateTask(ids.root!, { status: "done", assigneeId: carol })).rejects.toBeInstanceOf(
+      IncompleteSubtasksError,
+    );
+
+    const task = await getTask(ids.root!);
+    expect(task.assignee).toBeNull();
+    expect(task.status).toBe("todo");
+  });
+
+  it("rejects the whole change when the assignment is blocked, so the status is not applied either", async () => {
+    const backend = await idOf("skills", "Backend");
+    const task = await createTask({ title: "api", skillIds: [backend] });
+
+    await expect(updateTask(task.id, { status: "done", assigneeId: await idOf("developers", "Alice") })).rejects.toBeInstanceOf(
+      SkillMismatchError,
+    );
+
+    expect(await statusOf(task.id)).toBe("todo");
+  });
+
+  it("applies the skill rule to subtasks like any other task", async () => {
+    const backend = await idOf("skills", "Backend");
+    const root = await createTask({
+      title: "root",
+      skillIds: [],
+      subtasks: [{ title: "api", skillIds: [backend] }],
+    });
+    const subtask = root.subtasks[0]!;
+
+    await expect(assignTask(subtask.id, await idOf("developers", "Alice"))).rejects.toBeInstanceOf(SkillMismatchError);
+    expect((await assignTask(subtask.id, await idOf("developers", "Bob"))).assignee?.name).toBe("Bob");
   });
 });

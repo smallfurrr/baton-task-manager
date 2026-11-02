@@ -51,6 +51,23 @@ export async function findSubtreeRows(db: Queryable, rootId: number): Promise<Ta
   return rows;
 }
 
+/** Every descendant (children, grandchildren, ...) of the task that is not Done, in creation order. */
+export async function findOpenDescendants(
+  db: Queryable,
+  taskId: number,
+): Promise<Array<{ id: number; title: string; status: string }>> {
+  const { rows } = await db.query<{ id: number; title: string; status: string }>(
+    `WITH RECURSIVE descendants AS (
+       SELECT id, title, status FROM tasks WHERE parent_id = $1
+       UNION ALL
+       SELECT t.id, t.title, t.status FROM tasks t JOIN descendants d ON t.parent_id = d.id
+     )
+     SELECT id, title, status FROM descendants WHERE status <> 'done' ORDER BY id`,
+    [taskId],
+  );
+  return rows;
+}
+
 export async function insertTask(db: Queryable, title: string, parentId: number | null): Promise<number> {
   const { rows } = await db.query<{ id: number }>(
     "INSERT INTO tasks (title, parent_id) VALUES ($1, $2) RETURNING id",
