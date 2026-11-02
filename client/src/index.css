@@ -1,0 +1,18 @@
+/* Global base only: design tokens and resets. Component styles live in *.module.css files. */
+:root {
+  --text: #1f2933;
+  --text-muted: #52606d;
+  --border: #d9dee3;
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}

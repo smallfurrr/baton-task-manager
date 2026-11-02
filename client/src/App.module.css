@@ -1,0 +1,35 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 2rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.navLink {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  color: var(--text);
+}
+
+.navLinkActive {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.main {
+  padding: 1.5rem 2rem;
+}

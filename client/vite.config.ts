@@ -1,0 +1,16 @@
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    // The API is served under /api in every environment; locally Vite forwards it to the server.
+    proxy: { "/api": "http://localhost:3000" },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
+});
