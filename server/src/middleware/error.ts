@@ -5,9 +5,11 @@ export const notFoundHandler: RequestHandler = (req) => {
   throw new NotFoundError(`Route not found: ${req.method} ${req.path}`);
 };
 
-/** Body-parser errors carry a status and a `type`; malformed JSON is a client error. */
-function isMalformedJson(err: unknown): boolean {
-  return err instanceof SyntaxError && "type" in err && err.type === "entity.parse.failed";
+/** Body-parser errors carry a `type`; malformed JSON and oversized bodies are client errors. */
+function bodyParserErrorType(err: unknown): string | undefined {
+  return typeof err === "object" && err !== null && "type" in err && typeof err.type === "string"
+    ? err.type
+    : undefined;
 }
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
@@ -17,8 +19,13 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     });
     return;
   }
-  if (isMalformedJson(err)) {
+  const parserError = bodyParserErrorType(err);
+  if (parserError === "entity.parse.failed") {
     res.status(400).json({ error: { code: "INVALID_JSON", message: "Request body is not valid JSON" } });
+    return;
+  }
+  if (parserError === "entity.too.large") {
+    res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" } });
     return;
   }
   console.error(err);

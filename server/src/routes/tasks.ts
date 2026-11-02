@@ -1,21 +1,26 @@
 import { Router } from "express";
 import { z } from "zod";
 import * as taskService from "../services/taskService.js";
-import { TASK_STATUSES } from "../services/taskService.js";
+import { TASK_STATUSES, type CreateTaskInput } from "../services/taskService.js";
 import { idNumberSchema, parseBody, parseId } from "../validation.js";
+import { checkTreeLimits } from "./taskTreeLimits.js";
 
 export const tasksRouter = Router();
 
-const createTaskSchema = z
-  .object({
-    title: z
-      .string({ error: "title is required and must be a string" })
-      .trim()
-      .min(1, "title must not be empty")
-      .max(500, "title must be at most 500 characters"),
-    skillIds: z.array(idNumberSchema).default([]),
-  })
-  .strict();
+/** A task to create with its subtasks, to any depth (the depth is capped by `checkTreeLimits`). */
+const createTaskSchema: z.ZodType<CreateTaskInput> = z.lazy(() =>
+  z
+    .object({
+      title: z
+        .string({ error: "title is required and must be a string" })
+        .trim()
+        .min(1, "title must not be empty")
+        .max(500, "title must be at most 500 characters"),
+      skillIds: z.array(idNumberSchema).default([]),
+      subtasks: z.array(createTaskSchema).default([]),
+    })
+    .strict(),
+);
 
 const updateTaskSchema = z
   .object({
@@ -36,6 +41,7 @@ tasksRouter.get("/:id", async (req, res) => {
 });
 
 tasksRouter.post("/", async (req, res) => {
+  checkTreeLimits(req.body);
   const task = await taskService.createTask(parseBody(createTaskSchema, req.body));
   res.status(201).location(`/api/tasks/${task.id}`).json(task);
 });

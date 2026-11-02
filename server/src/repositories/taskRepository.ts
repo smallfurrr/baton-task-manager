@@ -51,8 +51,11 @@ export async function findSubtreeRows(db: Queryable, rootId: number): Promise<Ta
   return rows;
 }
 
-export async function insertTask(db: Queryable, title: string): Promise<number> {
-  const { rows } = await db.query<{ id: number }>("INSERT INTO tasks (title) VALUES ($1) RETURNING id", [title]);
+export async function insertTask(db: Queryable, title: string, parentId: number | null): Promise<number> {
+  const { rows } = await db.query<{ id: number }>(
+    "INSERT INTO tasks (title, parent_id) VALUES ($1, $2) RETURNING id",
+    [title, parentId],
+  );
   return rows[0]!.id;
 }
 

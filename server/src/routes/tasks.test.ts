@@ -401,3 +401,168 @@ describe("subtasks in task responses", () => {
     expect(res.body).toMatchObject({ id: child, parentId: root, status: "in_progress" });
   });
 });
+
+describe("POST /api/tasks with subtasks", () => {
+  type NodeInput = { title: string; skillIds?: number[]; subtasks?: NodeInput[] };
+
+  /** Compact view of a task tree: "title(child, child(grandchild))" */
+  function render(task: { title: string; subtasks: unknown[] }): string {
+    const children = (task.subtasks as { title: string; subtasks: unknown[] }[]).map(render);
+    return children.length ? `${task.title}(${children.join(", ")})` : task.title;
+  }
+
+  const post = (body: unknown) => request(app).post("/api/tasks").send(body as object);
+
+  function chain(levels: number): NodeInput {
+    let node: NodeInput = { title: "leaf" };
+    for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, subtasks: [node] };
+    return node;
+  }
+
+  it("creates a task with nested subtasks in one request", async () => {
+    const res = await post({
+      title: "root",
+      subtasks: [{ title: "a", subtasks: [{ title: "a1" }, { title: "a2" }] }, { title: "b" }],
+    });
+
+    expect(res.status).toBe(201);
+    expect(render(res.body)).toBe("root(a(a1, a2), b)");
+    expect(await taskCount()).toBe(5);
+  });
+
+  it("links each subtask to its parent and starts every task To-do and unassigned", async () => {
+    const res = await post({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "grandchild" }] }] });
+
+    const child = res.body.subtasks[0];
+    const grandchild = child.subtasks[0];
+    expect(res.body.parentId).toBeNull();
+    expect(child.parentId).toBe(res.body.id);
+    expect(grandchild.parentId).toBe(child.id);
+    for (const task of [res.body, child, grandchild]) {
+      expect(task).toMatchObject({ status: "todo", assignee: null });
+    }
+  });
+
+  it("gives each task its own skills", async () => {
+    const frontend = await idOf("skills", "Frontend");
+    const backend = await idOf("skills", "Backend");
+
+    const res = await post({
+      title: "root",
+      skillIds: [frontend, backend],
+      subtasks: [{ title: "ui", skillIds: [frontend] }, { title: "plain" }, { title: "api", skillIds: [backend, backend] }],
+    });
+
+    const names = (task: { skills: { name: string }[] }) => task.skills.map((s) => s.name);
+    expect(names(res.body)).toEqual(["Backend", "Frontend"]);
+    expect(names(res.body.subtasks[0])).toEqual(["Frontend"]);
+    expect(names(res.body.subtasks[1])).toEqual([]);
+    expect(names(res.body.subtasks[2])).toEqual(["Backend"]);
+  });
+
+  it("keeps subtasks in the order given", async () => {
+    const res = await post({ title: "root", subtasks: [{ title: "zebra" }, { title: "apple" }, { title: "mango" }] });
+
+    expect(render(res.body)).toBe("root(zebra, apple, mango)");
+    const fetched = await request(app).get(`/api/tasks/${res.body.id}`);
+    expect(render(fetched.body)).toBe("root(zebra, apple, mango)");
+  });
+
+  it("returns the same tree on a later read", async () => {
+    const created = await post({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "grandchild" }] }] });
+
+    const fetched = await request(app).get(`/api/tasks/${created.body.id}`);
+
+    expect(fetched.body).toEqual(created.body);
+  });
+
+  it("shows only the root at the top level of the list", async () => {
+    await post({ title: "root", subtasks: [{ title: "child" }] });
+
+    const res = await request(app).get("/api/tasks");
+
+    expect(res.body.map((t: { title: string }) => t.title)).toEqual(["root"]);
+  });
+
+  it("trims every title in the tree", async () => {
+    const res = await post({ title: "  root  ", subtasks: [{ title: "  child  " }] });
+
+    expect(render(res.body)).toBe("root(child)");
+  });
+
+  it("returns 422 and saves nothing when a deep subtask has an unknown skill", async () => {
+    const frontend = await idOf("skills", "Frontend");
+
+    const res = await post({
+      title: "root",
+      skillIds: [frontend],
+      subtasks: [{ title: "ok" }, { title: "a", subtasks: [{ title: "deep", skillIds: [999999] }] }],
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("INVALID_REFERENCE");
+    expect(res.body.error.message).toContain("999999");
+    expect(await taskCount()).toBe(0);
+  });
+
+  it("lists every unknown skill id across the tree", async () => {
+    const res = await post({
+      title: "root",
+      skillIds: [777777],
+      subtasks: [{ title: "a", skillIds: [888888] }],
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.details.skillIds).toEqual([777777, 888888]);
+  });
+
+  it.each([
+    ["an empty subtask title", { title: "root", subtasks: [{ title: "" }] }, "subtasks.0.title"],
+    ["a blank nested title", { title: "root", subtasks: [{ title: "ok", subtasks: [{ title: "   " }] }] }, "subtasks.0.subtasks.0.title"],
+    ["a missing subtask title", { title: "root", subtasks: [{}] }, "subtasks.0.title"],
+    ["a subtask title over 500 characters", { title: "root", subtasks: [{ title: "x".repeat(501) }] }, "subtasks.0.title"],
+    ["an unknown key on a subtask", { title: "root", subtasks: [{ title: "a", assigneeId: 1 }] }, "subtasks.0"],
+    ["subtasks that is not an array", { title: "root", subtasks: "nope" }, "subtasks"],
+    ["a subtask that is not an object", { title: "root", subtasks: ["nope"] }, "subtasks.0"],
+    ["a bad skill id on a subtask", { title: "root", subtasks: [{ title: "a", skillIds: [0] }] }, "subtasks.0.skillIds.0"],
+  ])("rejects %s with 400, naming the path, and saves nothing", async (_label, body, path) => {
+    const res = await post(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.details.map((d: { path: string }) => d.path)).toContain(path);
+    expect(await taskCount()).toBe(0);
+  });
+
+  it("accepts a tree 10 levels deep and rejects 11", async () => {
+    expect((await post(chain(10))).status).toBe(201);
+
+    const res = await post(chain(11));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).toContain("10 levels");
+  });
+
+  it("accepts 100 tasks in one request and rejects 101", async () => {
+    const wide = (count: number) => ({
+      title: "root",
+      subtasks: Array.from({ length: count - 1 }, (_, i) => ({ title: `child ${i}` })),
+    });
+
+    expect((await post(wide(100))).status).toBe(201);
+    expect(await taskCount()).toBe(100);
+
+    const res = await post(wide(101));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain("100 tasks");
+    expect(await taskCount()).toBe(100);
+  });
+
+  it("rejects an extremely deep payload with 400 rather than crashing", async () => {
+    const res = await post(chain(2000));
+
+    expect(res.status).toBe(400);
+  });
+});

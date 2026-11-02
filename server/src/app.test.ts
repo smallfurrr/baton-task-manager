@@ -20,4 +20,14 @@ describe("app", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_JSON");
   });
+
+  it("returns 413 for a request body over the size limit", async () => {
+    const res = await request(createApp())
+      .post("/api/tasks")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ title: "x".repeat(200_000) }));
+
+    expect(res.status).toBe(413);
+    expect(res.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+  });
 });

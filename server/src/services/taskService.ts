@@ -10,9 +10,15 @@ export type { Task };
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+/** A task to create, with any subtasks to create under it (to any depth). */
 export interface CreateTaskInput {
   title: string;
   skillIds: number[];
+  subtasks?: CreateTaskInput[];
+}
+
+function collectSkillIds(input: CreateTaskInput): number[] {
+  return [...input.skillIds, ...(input.subtasks ?? []).flatMap(collectSkillIds)];
 }
 
 /** Top-level tasks, newest first, each with its subtasks nested underneath. */
@@ -30,18 +36,30 @@ export async function getTask(id: number): Promise<Task> {
   return task;
 }
 
-export async function createTask({ title, skillIds }: CreateTaskInput): Promise<Task> {
-  const uniqueSkillIds = [...new Set(skillIds)];
-
+/**
+ * Create a task and all its subtasks in one transaction, so a failure anywhere
+ * saves nothing. Parents are inserted before their children and siblings in
+ * the order given, so ids follow creation order.
+ */
+export async function createTask(input: CreateTaskInput): Promise<Task> {
   const id = await withTransaction(async (client) => {
-    const existing = new Set(await tasks.findExistingSkillIds(client, uniqueSkillIds));
-    const unknown = uniqueSkillIds.filter((skillId) => !existing.has(skillId));
+    const requested = [...new Set(collectSkillIds(input))];
+    const existing = new Set(await tasks.findExistingSkillIds(client, requested));
+    const unknown = requested.filter((skillId) => !existing.has(skillId));
     if (unknown.length > 0) {
       throw new InvalidReferenceError(`Unknown skill id(s): ${unknown.join(", ")}`, { skillIds: unknown });
     }
-    const taskId = await tasks.insertTask(client, title);
-    await tasks.insertTaskSkills(client, taskId, uniqueSkillIds);
-    return taskId;
+
+    async function insertTree(node: CreateTaskInput, parentId: number | null): Promise<number> {
+      const taskId = await tasks.insertTask(client, node.title, parentId);
+      await tasks.insertTaskSkills(client, taskId, [...new Set(node.skillIds)]);
+      for (const subtask of node.subtasks ?? []) {
+        await insertTree(subtask, taskId);
+      }
+      return taskId;
+    }
+
+    return insertTree(input, null);
   });
 
   return getTask(id);
