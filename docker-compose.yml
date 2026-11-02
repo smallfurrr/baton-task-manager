@@ -17,5 +17,19 @@ services:
       timeout: 5s
       retries: 10
 
+  server:
+    build: ./server
+    init: true
+    environment:
+      PORT: 3000
+      # Overrides the localhost URL from .env: inside Docker the database host is the service name.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Temporary: published so the API can be called directly until the client's nginx proxies /api.
+      - "3000:3000"
+
 volumes:
   db_data:
