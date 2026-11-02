@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
-import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
+import {
+  IncompleteSubtasksError,
+  InvalidReferenceError,
+  NotFoundError,
+  SkillMismatchError,
+  ValidationError,
+} from "../errors.js";
 import { resetDatabase } from "../test/db.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
 
@@ -311,9 +317,15 @@ describe("updateTask: reopening Done ancestors", () => {
   it("reopens every Done ancestor up the tree", async () => {
     const ids = await createTree({
       title: "root",
-      subtasks: [{ title: "a", subtasks: [{ title: "a1", subtasks: [{ title: "a1x" }] }] }],
+      subtasks: [{ title: "a", subtasks: [{ title: "a1" }] }],
     });
-    await force("done", ids.root!, ids.a!, ids.a1!, ids.a1x!);
+    // The API only creates three levels, but the cascade has no depth limit: add a fourth directly.
+    const { rows } = await getPool().query<{ id: number }>(
+      "INSERT INTO tasks (title, parent_id) VALUES ('a1x', $1) RETURNING id",
+      [ids.a1],
+    );
+    ids.a1x = rows[0]!.id;
+    await force("done", ids.root!, ids.a!, ids.a1!, ids.a1x);
 
     await setStatus(ids.a1x!, "in_progress");
 
@@ -433,5 +445,44 @@ describe("updateTask: reopening Done ancestors", () => {
     await expect(setStatus(ids.root!, "done")).rejects.toBeInstanceOf(IncompleteSubtasksError);
     await setStatus(ids.child!, "done");
     expect((await setStatus(ids.root!, "done")).status).toBe("done");
+  });
+});
+
+describe("createTask: size limits", () => {
+  type Node = { title: string; skillIds: number[]; subtasks: Node[] };
+
+  function chain(levels: number): Node {
+    let node: Node = { title: "leaf", skillIds: [], subtasks: [] };
+    for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, skillIds: [], subtasks: [node] };
+    return node;
+  }
+
+  async function taskCount(): Promise<number> {
+    const { rows } = await getPool().query<{ n: number }>("SELECT count(*)::int AS n FROM tasks");
+    return rows[0]!.n;
+  }
+
+  it("accepts three levels: task, subtask, sub-subtask", async () => {
+    await createTask(chain(3));
+
+    expect(await taskCount()).toBe(3);
+  });
+
+  it("rejects a fourth level, whoever calls the service, and saves nothing", async () => {
+    await expect(createTask(chain(4))).rejects.toBeInstanceOf(ValidationError);
+
+    expect(await taskCount()).toBe(0);
+  });
+
+  it("rejects more than 100 tasks in one call and saves nothing", async () => {
+    const tooMany = {
+      title: "root",
+      skillIds: [],
+      subtasks: Array.from({ length: 100 }, (_, i) => ({ title: `child ${i}`, skillIds: [], subtasks: [] })),
+    };
+
+    await expect(createTask(tooMany)).rejects.toBeInstanceOf(ValidationError);
+
+    expect(await taskCount()).toBe(0);
   });
 });

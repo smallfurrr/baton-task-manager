@@ -3,6 +3,7 @@ import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMis
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
+import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
 export type { Task };
@@ -42,6 +43,8 @@ export async function getTask(id: number): Promise<Task> {
  * the order given, so ids follow creation order.
  */
 export async function createTask(input: CreateTaskInput): Promise<Task> {
+  checkTreeLimits(input);
+
   const id = await withTransaction(async (client) => {
     const requested = [...new Set(collectSkillIds(input))];
     const existing = new Set(await tasks.findExistingSkillIds(client, requested));

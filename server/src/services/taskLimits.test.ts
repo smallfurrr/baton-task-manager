@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "../errors.js";
-import { checkTreeLimits, MAX_TASK_DEPTH, MAX_TASKS_PER_REQUEST } from "./taskTreeLimits.js";
+import { checkTreeLimits, MAX_TASK_DEPTH, MAX_TASKS_PER_REQUEST } from "./taskLimits.js";
 
 type Node = { title: string; subtasks: Node[] };
 

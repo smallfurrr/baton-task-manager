@@ -534,14 +534,14 @@ describe("POST /api/tasks with subtasks", () => {
     expect(await taskCount()).toBe(0);
   });
 
-  it("accepts a tree 10 levels deep and rejects 11", async () => {
-    expect((await post(chain(10))).status).toBe(201);
+  it("accepts a tree 3 levels deep (task, subtask, sub-subtask) and rejects 4", async () => {
+    expect((await post(chain(3))).status).toBe(201);
 
-    const res = await post(chain(11));
+    const res = await post(chain(4));
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error.message).toContain("10 levels");
+    expect(res.body.error.message).toContain("3 levels");
   });
 
   it("accepts 100 tasks in one request and rejects 101", async () => {

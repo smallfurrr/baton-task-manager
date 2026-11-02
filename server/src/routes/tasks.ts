@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
+import { checkTreeLimits } from "../services/taskLimits.js";
 import * as taskService from "../services/taskService.js";
 import { TASK_STATUSES, type CreateTaskInput } from "../services/taskService.js";
 import { idNumberSchema, parseBody, parseId } from "../validation.js";
-import { checkTreeLimits } from "./taskTreeLimits.js";
 
 export const tasksRouter = Router();
 
@@ -41,6 +41,7 @@ tasksRouter.get("/:id", async (req, res) => {
 });
 
 tasksRouter.post("/", async (req, res) => {
+  // Also enforced inside createTask; checking the raw body first keeps schema validation off oversized trees.
   checkTreeLimits(req.body);
   const task = await taskService.createTask(parseBody(createTaskSchema, req.body));
   res.status(201).location(`/api/tasks/${task.id}`).json(task);

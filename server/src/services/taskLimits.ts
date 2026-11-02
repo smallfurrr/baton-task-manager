@@ -1,6 +1,7 @@
 import { ValidationError } from "../errors.js";
 
-export const MAX_TASK_DEPTH = 10;
+/** Levels counted from the task itself: task, subtask, sub-subtask. */
+export const MAX_TASK_DEPTH = 3;
 export const MAX_TASKS_PER_REQUEST = 100;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -8,9 +9,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Reject a create-task body whose subtask tree is too deep or too large.
- * Runs on the raw body, iteratively and before schema validation, so even a
- * very deeply nested payload is rejected without deep recursion.
+ * Reject a task tree that is too deep or too large. This is the rule behind
+ * the caps above; `createTask` enforces it for every caller. It reads the
+ * tree iteratively and accepts `unknown`, so the route can also run it on the
+ * raw request body before schema validation and reject even a very deeply
+ * nested payload without deep recursion.
  */
 export function checkTreeLimits(body: unknown): void {
   const pending: Array<{ node: unknown; depth: number }> = [{ node: body, depth: 1 }];
@@ -22,7 +25,7 @@ export function checkTreeLimits(body: unknown): void {
 
     count++;
     if (depth > MAX_TASK_DEPTH) {
-      throw new ValidationError(`Subtasks can be nested at most ${MAX_TASK_DEPTH} levels deep`, {
+      throw new ValidationError(`Tasks can be nested at most ${MAX_TASK_DEPTH} levels deep, counting the task itself`, {
         maxDepth: MAX_TASK_DEPTH,
       });
     }
