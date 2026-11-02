@@ -1,0 +1,22 @@
+.heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.heading h2 {
+  margin: 0;
+}
+
+.createLink {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.createLink:hover {
+  background: var(--surface);
+}

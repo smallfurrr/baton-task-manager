@@ -3,6 +3,11 @@
   --text: #1f2933;
   --text-muted: #52606d;
   --border: #d9dee3;
+  --surface: #ffffff;
+  --danger-bg: #fdecea;
+  --danger-border: #e57373;
+  --success-bg: #e8f5e9;
+  --success-border: #81c784;
   font-family: system-ui, sans-serif;
   color: var(--text);
 }

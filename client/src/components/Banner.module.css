@@ -1,0 +1,16 @@
+.banner {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid;
+  border-radius: 4px;
+}
+
+.error {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+.notice {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}

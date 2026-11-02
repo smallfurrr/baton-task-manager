@@ -1,0 +1,15 @@
+.select {
+  width: 100%;
+  min-width: 9rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+
+.select:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import styles from "./App.module.css";
+import { TaskListPage } from "./pages/TaskListPage";
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   return [styles.navLink, isActive && styles.navLinkActive].filter(Boolean).join(" ");
@@ -21,7 +22,7 @@ export function App() {
       </header>
       <main className={styles.main}>
         <Routes>
-          <Route path="/" element={<h2>Tasks</h2>} />
+          <Route path="/" element={<TaskListPage />} />
           <Route path="/tasks/new" element={<h2>Create Task</h2>} />
           <Route path="*" element={<h2>Page not found</h2>} />
         </Routes>
