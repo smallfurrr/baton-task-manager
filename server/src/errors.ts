@@ -32,3 +32,16 @@ export class InvalidReferenceError extends AppError {
     this.name = "InvalidReferenceError";
   }
 }
+
+/** The developer lacks one or more skills the task requires. */
+export class SkillMismatchError extends AppError {
+  constructor(developerName: string, missing: ReadonlyArray<{ id: number; name: string }>) {
+    super(
+      409,
+      "SKILL_MISMATCH",
+      `${developerName} cannot be assigned: missing required skill(s) ${missing.map((s) => s.name).join(", ")}`,
+      { missingSkills: missing },
+    );
+    this.name = "SkillMismatchError";
+  }
+}

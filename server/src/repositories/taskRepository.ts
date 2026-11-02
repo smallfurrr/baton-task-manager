@@ -50,3 +50,7 @@ export async function findExistingSkillIds(db: Queryable, ids: number[]): Promis
   const { rows } = await db.query<{ id: number }>("SELECT id FROM skills WHERE id = ANY($1::int[])", [ids]);
   return rows.map((row) => row.id);
 }
+
+export async function setAssignee(db: Queryable, taskId: number, developerId: number | null): Promise<void> {
+  await db.query("UPDATE tasks SET assignee_id = $2, updated_at = now() WHERE id = $1", [taskId, developerId]);
+}
