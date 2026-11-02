@@ -15,7 +15,7 @@ assignment, nested subtasks, and automatic skill tagging via an LLM.
 - Server tests: `cd server && npm test`
 - Client tests: `cd client && npm test`
 - Lint / typecheck: `npm run lint` / `npm run typecheck` (in each package)
-- Run migrations: <fill in>
+- Run migrations: `cd server && npm run migrate` (needs `docker compose up -d db`; reads the repo-root `.env`)
 
 ## How we work
 - Plan first: propose an approach and wait for approval before editing.

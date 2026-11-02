@@ -12,15 +12,20 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "node --env-file-if-exists=../.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m migrations",
+    "migrate:down": "node --env-file-if-exists=../.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations"
   },
   "dependencies": {
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "eslint": "^10.14.0",
     "supertest": "^7.3.1",
