@@ -41,6 +41,13 @@ describe("POST /api/tasks", () => {
     });
   });
 
+  it("creates a task when skillIds is an explicit empty array", async () => {
+    const res = await request(app).post("/api/tasks").send({ title: "No skills yet", skillIds: [] });
+
+    expect(res.status).toBe(201);
+    expect(res.body.skills).toEqual([]);
+  });
+
   it("creates a task with the requested skills, ordered by name", async () => {
     const frontend = await idOf("skills", "Frontend");
     const backend = await idOf("skills", "Backend");
