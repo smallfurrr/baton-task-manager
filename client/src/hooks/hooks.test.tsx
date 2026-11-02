@@ -10,10 +10,12 @@ import { useCreateTask, useTasks, useUpdateTask } from "./tasks";
 
 const task: Task = {
   id: 1,
+  parentId: null,
   title: "Homepage",
   status: "todo",
   skills: [],
   assignee: null,
+  subtasks: [],
   createdAt: "2026-11-02T00:00:00.000Z",
   updatedAt: "2026-11-02T00:00:00.000Z",
 };
@@ -71,7 +73,7 @@ describe("mutation hooks", () => {
     const { result } = renderHook(() => ({ tasks: useTasks(), create: useCreateTask() }), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.tasks.data).toEqual([task]));
 
-    await act(() => result.current.create.mutateAsync({ title: "New", skillIds: [] }));
+    await act(() => result.current.create.mutateAsync({ title: "New", skillIds: [], subtasks: [] }));
 
     await waitFor(() => expect(result.current.tasks.data).toEqual([created, task]));
     expect(fetchMock).toHaveBeenCalledTimes(3);

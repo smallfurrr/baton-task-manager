@@ -17,10 +17,12 @@ const developers: Developer[] = [
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 10,
+    parentId: null,
     title: "Responsive homepage",
     status: "todo",
     skills: [frontend],
     assignee: null,
+    subtasks: [],
     createdAt: "2026-11-02T00:00:00.000Z",
     updatedAt: "2026-11-02T00:00:00.000Z",
     ...overrides,
@@ -127,5 +129,120 @@ describe("TaskTable", () => {
     expect(screen.getByRole("combobox", { name: "Status for Saving" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Assignee for Saving" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "Status for Idle" })).toBeEnabled();
+  });
+});
+
+describe("TaskTable: subtasks", () => {
+  const nested: Task[] = [
+    makeTask({
+      id: 1,
+      title: "Profile page",
+      skills: [frontend, backend],
+      subtasks: [
+        makeTask({
+          id: 2,
+          parentId: 1,
+          title: "Upload endpoint",
+          skills: [backend],
+          subtasks: [makeTask({ id: 3, parentId: 2, title: "Resize images", skills: [backend] })],
+        }),
+        makeTask({ id: 4, parentId: 1, title: "Avatar picker", skills: [frontend] }),
+      ],
+    }),
+    makeTask({ id: 5, title: "Another task" }),
+  ];
+
+  const titleCellDepth = (title: string) => {
+    const row = screen.getByRole("row", { name: new RegExp(title) });
+    return within(row).getAllByRole("cell")[0]!.style.getPropertyValue("--depth");
+  };
+
+  function rowTitles(): string[] {
+    return screen
+      .getAllByRole("row")
+      .slice(1) // header
+      // The visible "↳" marker is decoration (aria-hidden), so leave it out of the title text.
+      .map((row) => (within(row).getAllByRole("cell")[0]!.textContent ?? "").replace("↳", ""));
+  }
+
+  it("shows each subtask directly under its parent, to any depth", () => {
+    renderTable(nested);
+
+    expect(rowTitles()).toEqual([
+      "Profile page",
+      "Subtask: Upload endpoint",
+      "Subtask: Resize images",
+      "Subtask: Avatar picker",
+      "Another task",
+    ]);
+  });
+
+  it("indents by depth and marks subtasks, but not top-level tasks", () => {
+    renderTable(nested);
+
+    expect(titleCellDepth("Profile page")).toBe("0");
+    expect(titleCellDepth("Upload endpoint")).toBe("1");
+    expect(titleCellDepth("Resize images")).toBe("2");
+    expect(titleCellDepth("Avatar picker")).toBe("1");
+    expect(titleCellDepth("Another task")).toBe("0");
+    expect(screen.getAllByText("↳")).toHaveLength(3);
+  });
+
+  it("gives every subtask its own status and assignee controls", () => {
+    renderTable(nested);
+
+    expect(screen.getByRole("combobox", { name: "Status for Resize images" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Assignee for Resize images" })).toBeInTheDocument();
+  });
+
+  it("offers each subtask only the developers qualified for that subtask, not its parent", () => {
+    renderTable(nested);
+
+    expect(optionNames(screen.getByRole("combobox", { name: "Assignee for Profile page" }))).toEqual([
+      "Unassigned",
+      "Carol",
+    ]);
+    expect(optionNames(screen.getByRole("combobox", { name: "Assignee for Upload endpoint" }))).toEqual([
+      "Unassigned",
+      "Bob",
+      "Carol",
+      "Dave",
+    ]);
+    expect(optionNames(screen.getByRole("combobox", { name: "Assignee for Avatar picker" }))).toEqual([
+      "Unassigned",
+      "Alice",
+      "Carol",
+    ]);
+  });
+
+  it("reports a change to a subtask using the subtask's own id", async () => {
+    const onUpdate = renderTable(nested);
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Status for Resize images" }), "Done");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Assignee for Resize images" }), "Dave");
+
+    expect(onUpdate).toHaveBeenNthCalledWith(1, 3, { status: "done" });
+    expect(onUpdate).toHaveBeenNthCalledWith(2, 3, { assigneeId: 4 });
+  });
+
+  it("disables only the subtask that is being saved, not its parent or siblings", () => {
+    renderTable(nested, { pendingTaskId: 2 });
+
+    expect(screen.getByRole("combobox", { name: "Status for Upload endpoint" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Status for Profile page" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Status for Avatar picker" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Status for Resize images" })).toBeEnabled();
+  });
+
+  it("renders a deeply nested chain", () => {
+    let task = makeTask({ id: 20, title: "level 5" });
+    for (let level = 4; level >= 1; level--) {
+      task = makeTask({ id: 10 + level, title: `level ${level}`, subtasks: [task] });
+    }
+
+    renderTable([task]);
+
+    expect(rowTitles()).toHaveLength(5);
+    expect(titleCellDepth("level 5")).toBe("4");
   });
 });

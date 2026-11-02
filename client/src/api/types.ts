@@ -16,17 +16,23 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export interface Task {
   id: number;
+  /** Id of the parent task, or null for a top-level task. */
+  parentId: number | null;
   title: string;
   status: TaskStatus;
   skills: Skill[];
   assignee: { id: number; name: string } | null;
+  /** Subtasks in creation order, each with its own subtasks, to any depth. */
+  subtasks: Task[];
   createdAt: string;
   updatedAt: string;
 }
 
+/** A task to create, with any subtasks to create under it (to any depth). */
 export interface CreateTaskInput {
   title: string;
   skillIds: number[];
+  subtasks: CreateTaskInput[];
 }
 
 export interface UpdateTaskInput {

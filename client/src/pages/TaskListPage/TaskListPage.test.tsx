@@ -17,10 +17,12 @@ const developers: Developer[] = [
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 10,
+    parentId: null,
     title: "Profile page",
     status: "todo",
     skills: [frontend, backend],
     assignee: null,
+    subtasks: [],
     createdAt: "2026-11-02T00:00:00.000Z",
     updatedAt: "2026-11-02T00:00:00.000Z",
     ...overrides,
@@ -129,5 +131,96 @@ describe("TaskListPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Carol cannot be assigned");
     expect(screen.getByRole("combobox", { name: /Assignee/ })).toHaveDisplayValue("Unassigned");
+  });
+});
+
+describe("TaskListPage: subtasks", () => {
+  const parent = (overrides: Partial<Task> = {}): Task =>
+    makeTask({
+      id: 10,
+      title: "Profile page",
+      subtasks: [makeTask({ id: 11, parentId: 10, title: "Upload endpoint", skills: [backend] })],
+      ...overrides,
+    });
+
+  it("shows subtasks nested under their parents", async () => {
+    mockApi({
+      "GET /api/tasks": jsonResponse([parent()]),
+      "GET /api/developers": jsonResponse(developers),
+    });
+
+    renderWithProviders(<TaskListPage />);
+
+    expect(await screen.findByText("Profile page")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Status for Upload endpoint" })).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(3); // header + parent + subtask
+  });
+
+  it("saves a subtask's status to the subtask's own endpoint", async () => {
+    let tasks = [parent()];
+    const fetchMock = mockApi({
+      "GET /api/tasks": () => jsonResponse(tasks),
+      "GET /api/developers": jsonResponse(developers),
+      "PATCH /api/tasks/11": () => {
+        tasks = [parent({ subtasks: [{ ...tasks[0]!.subtasks[0]!, status: "done" }] })];
+        return jsonResponse(tasks[0]!.subtasks[0]);
+      },
+    });
+    renderWithProviders(<TaskListPage />);
+
+    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Status for Upload endpoint" }), "Done");
+
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Status for Upload endpoint" })).toHaveDisplayValue("Done"),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/tasks/11",
+      expect.objectContaining({ method: "PATCH", body: '{"status":"done"}' }),
+    );
+  });
+
+  it("shows the server's message and keeps the old value when a task cannot be marked Done yet", async () => {
+    mockApi({
+      "GET /api/tasks": jsonResponse([parent()]),
+      "GET /api/developers": jsonResponse(developers),
+      "PATCH /api/tasks/10": jsonResponse(
+        {
+          error: {
+            code: "INCOMPLETE_SUBTASKS",
+            message: "Cannot mark task Done: 1 subtask(s) are not Done (Upload endpoint)",
+          },
+        },
+        409,
+      ),
+    });
+    renderWithProviders(<TaskListPage />);
+
+    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Status for Profile page" }), "Done");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("1 subtask(s) are not Done (Upload endpoint)");
+    expect(screen.getByRole("combobox", { name: "Status for Profile page" })).toHaveDisplayValue("To-do");
+  });
+
+  it("shows a parent that the server reopened after a subtask was moved out of Done", async () => {
+    let tasks = [
+      parent({ status: "done", subtasks: [makeTask({ id: 11, parentId: 10, title: "Upload endpoint", status: "done" })] }),
+    ];
+    mockApi({
+      "GET /api/tasks": () => jsonResponse(tasks),
+      "GET /api/developers": jsonResponse(developers),
+      "PATCH /api/tasks/11": () => {
+        // The server reopens the Done parent as part of this change.
+        tasks = [parent({ status: "in_progress", subtasks: [{ ...tasks[0]!.subtasks[0]!, status: "in_progress" }] })];
+        return jsonResponse(tasks[0]!.subtasks[0]);
+      },
+    });
+    renderWithProviders(<TaskListPage />);
+    expect(await screen.findByRole("combobox", { name: "Status for Profile page" })).toHaveDisplayValue("Done");
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Status for Upload endpoint" }), "In progress");
+
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Status for Profile page" })).toHaveDisplayValue("In progress"),
+    );
   });
 });

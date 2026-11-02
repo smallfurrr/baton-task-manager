@@ -48,6 +48,7 @@ export function TaskForm({ skills, submitting, submitError, onSubmit }: TaskForm
     onSubmit({
       title: title.trim(),
       skillIds: skills.filter((skill) => selectedIds.has(skill.id)).map((skill) => skill.id),
+      subtasks: [],
     });
   }
 

@@ -13,10 +13,12 @@ const skills: Skill[] = [
 
 const createdTask: Task = {
   id: 5,
+  parentId: null,
   title: "Profile page",
   status: "todo",
   skills,
   assignee: null,
+  subtasks: [],
   createdAt: "2026-11-02T00:00:00.000Z",
   updatedAt: "2026-11-02T00:00:00.000Z",
 };
@@ -44,7 +46,7 @@ describe("task creation flow", () => {
     expect(await screen.findByRole("row", { name: /Profile page/ })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/tasks",
-      expect.objectContaining({ method: "POST", body: '{"title":"Profile page","skillIds":[1,2]}' }),
+      expect.objectContaining({ method: "POST", body: '{"title":"Profile page","skillIds":[1,2],"subtasks":[]}' }),
     );
   });
 
@@ -63,7 +65,7 @@ describe("task creation flow", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Task created");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/tasks",
-      expect.objectContaining({ body: '{"title":"No skills yet","skillIds":[]}' }),
+      expect.objectContaining({ body: '{"title":"No skills yet","skillIds":[],"subtasks":[]}' }),
     );
   });
 

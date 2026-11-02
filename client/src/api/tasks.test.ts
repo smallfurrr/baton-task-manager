@@ -13,11 +13,11 @@ describe("task api", () => {
   it("creates a task with a POST of the title and skill ids", async () => {
     const fetchMock = mockFetch(jsonResponse({ id: 1 }, 201));
 
-    await createTask({ title: "Homepage", skillIds: [1, 2] });
+    await createTask({ title: "Homepage", skillIds: [1, 2], subtasks: [] });
 
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/tasks");
-    expect(init).toMatchObject({ method: "POST", body: '{"title":"Homepage","skillIds":[1,2]}' });
+    expect(init).toMatchObject({ method: "POST", body: '{"title":"Homepage","skillIds":[1,2],"subtasks":[]}' });
   });
 
   it("updates a task with a PATCH to its id", async () => {

@@ -34,7 +34,7 @@ describe("TaskForm", () => {
     await userEvent.type(title(), "Write the docs");
     await userEvent.click(save());
 
-    expect(onSubmit).toHaveBeenCalledWith({ title: "Write the docs", skillIds: [] });
+    expect(onSubmit).toHaveBeenCalledWith({ title: "Write the docs", skillIds: [], subtasks: [] });
   });
 
   it("submits the ticked skills", async () => {
@@ -45,7 +45,7 @@ describe("TaskForm", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Frontend" }));
     await userEvent.click(save());
 
-    expect(onSubmit).toHaveBeenCalledWith({ title: "Profile page", skillIds: [1, 2] });
+    expect(onSubmit).toHaveBeenCalledWith({ title: "Profile page", skillIds: [1, 2], subtasks: [] });
   });
 
   it("leaves out a skill that was ticked and then unticked", async () => {
@@ -56,7 +56,7 @@ describe("TaskForm", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Frontend" }));
     await userEvent.click(save());
 
-    expect(onSubmit).toHaveBeenCalledWith({ title: "Homepage", skillIds: [] });
+    expect(onSubmit).toHaveBeenCalledWith({ title: "Homepage", skillIds: [], subtasks: [] });
   });
 
   it("trims the title before submitting", async () => {
@@ -65,7 +65,7 @@ describe("TaskForm", () => {
     await userEvent.type(title(), "   Padded   ");
     await userEvent.click(save());
 
-    expect(onSubmit).toHaveBeenCalledWith({ title: "Padded", skillIds: [] });
+    expect(onSubmit).toHaveBeenCalledWith({ title: "Padded", skillIds: [], subtasks: [] });
   });
 
   it("does not show a validation message before the first save attempt", () => {
