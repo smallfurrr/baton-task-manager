@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import * as taskService from "../services/taskService.js";
+import { TASK_STATUSES } from "../services/taskService.js";
 import { idNumberSchema, parseBody, parseId } from "../validation.js";
 
 export const tasksRouter = Router();
@@ -16,6 +17,16 @@ const createTaskSchema = z
   })
   .strict();
 
+const updateTaskSchema = z
+  .object({
+    status: z.enum(TASK_STATUSES, { error: `status must be one of: ${TASK_STATUSES.join(", ")}` }).optional(),
+    assigneeId: idNumberSchema.nullable().optional(),
+  })
+  .strict()
+  .refine((body) => body.status !== undefined || body.assigneeId !== undefined, {
+    message: "provide at least one of: status, assigneeId",
+  });
+
 tasksRouter.get("/", async (_req, res) => {
   res.json(await taskService.listTasks());
 });
@@ -27,4 +38,9 @@ tasksRouter.get("/:id", async (req, res) => {
 tasksRouter.post("/", async (req, res) => {
   const task = await taskService.createTask(parseBody(createTaskSchema, req.body));
   res.status(201).location(`/api/tasks/${task.id}`).json(task);
+});
+
+tasksRouter.patch("/:id", async (req, res) => {
+  const id = parseId(req.params.id, "task id");
+  res.json(await taskService.updateTask(id, parseBody(updateTaskSchema, req.body)));
 });

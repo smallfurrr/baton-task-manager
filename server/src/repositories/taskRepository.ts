@@ -51,6 +51,25 @@ export async function findExistingSkillIds(db: Queryable, ids: number[]): Promis
   return rows.map((row) => row.id);
 }
 
-export async function setAssignee(db: Queryable, taskId: number, developerId: number | null): Promise<void> {
-  await db.query("UPDATE tasks SET assignee_id = $2, updated_at = now() WHERE id = $1", [taskId, developerId]);
+export interface TaskChanges {
+  status?: string;
+  /** `null` clears the assignee; `undefined` leaves it unchanged. */
+  assigneeId?: number | null;
+}
+
+export async function updateTask(db: Queryable, taskId: number, changes: TaskChanges): Promise<void> {
+  await db.query(
+    `UPDATE tasks
+     SET status      = CASE WHEN $2::boolean THEN $3::text ELSE status END,
+         assignee_id = CASE WHEN $4::boolean THEN $5::int ELSE assignee_id END,
+         updated_at  = now()
+     WHERE id = $1`,
+    [
+      taskId,
+      changes.status !== undefined,
+      changes.status ?? null,
+      changes.assigneeId !== undefined,
+      changes.assigneeId ?? null,
+    ],
+  );
 }

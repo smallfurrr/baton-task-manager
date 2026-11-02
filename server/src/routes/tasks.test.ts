@@ -165,3 +165,133 @@ describe("GET /api/tasks/:id", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("PATCH /api/tasks/:id", () => {
+  async function createTask(title: string, ...skillNames: string[]): Promise<number> {
+    const skillIds = await Promise.all(skillNames.map((name) => idOf("skills", name)));
+    const res = await request(app).post("/api/tasks").send({ title, skillIds });
+    return res.body.id;
+  }
+
+  it("changes the status", async () => {
+    const id = await createTask("t");
+
+    const res = await request(app).patch(`/api/tasks/${id}`).send({ status: "in_progress" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("in_progress");
+  });
+
+  it.each(["todo", "in_progress", "done"])("accepts status %s", async (status) => {
+    const res = await request(app).patch(`/api/tasks/${await createTask("t")}`).send({ status });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe(status);
+  });
+
+  it("assigns a qualified developer", async () => {
+    const id = await createTask("t", "Frontend", "Backend");
+    const carol = await idOf("developers", "Carol");
+
+    const res = await request(app).patch(`/api/tasks/${id}`).send({ assigneeId: carol });
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignee).toEqual({ id: carol, name: "Carol" });
+  });
+
+  it("returns 409 SKILL_MISMATCH naming the missing skill when the developer is not qualified", async () => {
+    const id = await createTask("t", "Frontend", "Backend");
+
+    const res = await request(app)
+      .patch(`/api/tasks/${id}`)
+      .send({ assigneeId: await idOf("developers", "Alice") });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("SKILL_MISMATCH");
+    expect(res.body.error.details.missingSkills.map((s: { name: string }) => s.name)).toEqual(["Backend"]);
+    expect((await request(app).get(`/api/tasks/${id}`)).body.assignee).toBeNull();
+  });
+
+  it("unassigns with null", async () => {
+    const id = await createTask("t", "Backend");
+    await request(app).patch(`/api/tasks/${id}`).send({ assigneeId: await idOf("developers", "Bob") });
+
+    const res = await request(app).patch(`/api/tasks/${id}`).send({ assigneeId: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignee).toBeNull();
+  });
+
+  it("leaves the assignee alone on a status-only change", async () => {
+    const id = await createTask("t", "Backend");
+    const bob = await idOf("developers", "Bob");
+    await request(app).patch(`/api/tasks/${id}`).send({ assigneeId: bob });
+
+    const res = await request(app).patch(`/api/tasks/${id}`).send({ status: "done" });
+
+    expect(res.body.assignee).toEqual({ id: bob, name: "Bob" });
+    expect(res.body.status).toBe("done");
+  });
+
+  it("applies status and assignee together", async () => {
+    const id = await createTask("t", "Backend");
+
+    const res = await request(app)
+      .patch(`/api/tasks/${id}`)
+      .send({ status: "in_progress", assigneeId: await idOf("developers", "Dave") });
+
+    expect(res.body.status).toBe("in_progress");
+    expect(res.body.assignee.name).toBe("Dave");
+  });
+
+  it("changes nothing when the assignment in a combined update is rejected", async () => {
+    const id = await createTask("t", "Backend");
+
+    const res = await request(app)
+      .patch(`/api/tasks/${id}`)
+      .send({ status: "done", assigneeId: await idOf("developers", "Alice") });
+
+    expect(res.status).toBe(409);
+    expect((await request(app).get(`/api/tasks/${id}`)).body.status).toBe("todo");
+  });
+
+  it("returns 422 for an unknown developer", async () => {
+    const res = await request(app).patch(`/api/tasks/${await createTask("t")}`).send({ assigneeId: 999999 });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe("INVALID_REFERENCE");
+  });
+
+  it("returns 404 for an unknown task", async () => {
+    const res = await request(app).patch("/api/tasks/999999").send({ status: "done" });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 for a malformed task id", async () => {
+    const res = await request(app).patch("/api/tasks/abc").send({ status: "done" });
+
+    expect(res.status).toBe(400);
+  });
+
+  it.each([
+    ["an empty body", {}],
+    ["an unknown status", { status: "blocked" }],
+    ["a non-string status", { status: 1 }],
+    ["a string assigneeId", { assigneeId: "1" }],
+    ["a zero assigneeId", { assigneeId: 0 }],
+    ["a fractional assigneeId", { assigneeId: 1.5 }],
+    ["an unknown property such as title", { status: "done", title: "new title" }],
+  ])("rejects %s with 400", async (_label, body) => {
+    const res = await request(app).patch(`/api/tasks/${await createTask("t")}`).send(body);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects a request with no body", async () => {
+    const res = await request(app).patch(`/api/tasks/${await createTask("t")}`);
+
+    expect(res.status).toBe(400);
+  });
+});

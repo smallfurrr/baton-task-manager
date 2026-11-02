@@ -3,11 +3,15 @@ import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import { InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
 import { resetDatabase } from "../test/db.js";
-import { assignTask, createTask, getTask } from "./taskService.js";
+import { createTask, getTask, updateTask } from "./taskService.js";
 
 async function idOf(table: "skills" | "developers", name: string): Promise<number> {
   const { rows } = await getPool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1`, [name]);
   return rows[0]!.id;
+}
+
+function assignTask(taskId: number, assigneeId: number | null) {
+  return updateTask(taskId, { assigneeId });
 }
 
 async function taskRequiring(...skillNames: string[]): Promise<number> {

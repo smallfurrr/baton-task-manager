@@ -6,6 +6,9 @@ import { missingSkills } from "./assignment.js";
 
 export type Task = tasks.TaskRow;
 
+export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
 export interface CreateTaskInput {
   title: string;
   skillIds: number[];
@@ -38,24 +41,32 @@ export async function createTask({ title, skillIds }: CreateTaskInput): Promise<
   return getTask(id);
 }
 
+export interface UpdateTaskInput {
+  status?: TaskStatus;
+  /** `null` clears the assignee; omitted leaves it unchanged. */
+  assigneeId?: number | null;
+}
+
 /**
- * Assign a task to a developer, or clear the assignee with `null`.
- * Enforces the skill rule: the developer must hold every skill the task requires.
+ * Change a task's status and/or assignee in one transaction, so a rejected
+ * change leaves the task untouched. Enforces the skill rule whenever an
+ * assignee is set: the developer must hold every skill the task requires.
  */
-export async function assignTask(taskId: number, developerId: number | null): Promise<Task> {
+export async function updateTask(taskId: number, changes: UpdateTaskInput): Promise<Task> {
   await withTransaction(async (client) => {
     const task = await tasks.findTaskById(client, taskId);
     if (!task) throw new NotFoundError(`Task ${taskId} not found`);
 
-    if (developerId !== null) {
-      const developer = await developers.findDeveloperById(client, developerId);
-      if (!developer) throw new InvalidReferenceError(`Developer ${developerId} not found`);
+    const { assigneeId } = changes;
+    if (assigneeId !== undefined && assigneeId !== null) {
+      const developer = await developers.findDeveloperById(client, assigneeId);
+      if (!developer) throw new InvalidReferenceError(`Developer ${assigneeId} not found`);
 
       const missing = missingSkills(task.skills, developer.skills);
       if (missing.length > 0) throw new SkillMismatchError(developer.name, missing);
     }
 
-    await tasks.setAssignee(client, taskId, developerId);
+    await tasks.updateTask(client, taskId, changes);
   });
 
   return getTask(taskId);
