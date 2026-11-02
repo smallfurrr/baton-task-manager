@@ -31,7 +31,14 @@ assignment, nested subtasks, and automatic skill tagging via an LLM.
 - Tasks can be created without an assignee.
 - Task status can be changed (e.g. To-do, In progress, Done).
 - A task can only be set to Done if all its subtasks are Done. Subtasks
-  have the same properties as tasks and can nest to any depth.
+  have the same properties as tasks and can nest up to 3 levels deep
+  (task, subtask, sub-subtask). The cap is enforced where tasks are
+  created (API and creation form); the schema and the rules work at any
+  depth.
+- When a task is set to To-do or In progress, every Done ancestor is
+  reopened to In progress (upward cascade). Ancestors that are To-do or
+  In progress are left alone, and setting a task to Done never cascades.
+  Together with the Done rule, a Done task never has unfinished subtasks.
 - Tasks and subtasks created without skills get skills from the LLM
   automatically on the server. Validate LLM output against known skills,
   and a failed LLM call must never block task creation.
