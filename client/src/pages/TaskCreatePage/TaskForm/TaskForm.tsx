@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { CreateTaskInput, Skill } from "../../../api/types";
-import { ErrorBanner } from "../../../components/ErrorBanner";
+import { Banner } from "../../../components/Banner/Banner";
 import styles from "./TaskForm.module.css";
 
 export const MAX_TITLE_LENGTH = 500;
@@ -53,7 +53,7 @@ export function TaskForm({ skills, submitting, submitError, onSubmit }: TaskForm
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
-      {submitError && <ErrorBanner message={submitError} />}
+      {submitError && <Banner variant="error" message={submitError} />}
 
       <div className={styles.field}>
         <label htmlFor={titleId}>Title</label>

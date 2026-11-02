@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ErrorBanner } from "../../components/ErrorBanner";
+import { Banner } from "../../components/Banner/Banner";
 import { TaskForm } from "./TaskForm/TaskForm";
 import { useSkills } from "../../hooks/skills";
 import { useCreateTask } from "../../hooks/tasks";
@@ -12,7 +12,7 @@ export function TaskCreatePage() {
   return (
     <section>
       <h2>Create Task</h2>
-      {skills.error && <ErrorBanner message={`Could not load skills: ${skills.error.message}`} />}
+      {skills.error && <Banner variant="error" message={`Could not load skills: ${skills.error.message}`} />}
       {!skills.error && !skills.data && <p>Loading…</p>}
       {skills.data && (
         <TaskForm

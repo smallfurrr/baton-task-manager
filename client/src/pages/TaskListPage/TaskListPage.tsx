@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ErrorBanner } from "../../components/ErrorBanner";
-import { NoticeBanner } from "../../components/NoticeBanner";
+import { Banner } from "../../components/Banner/Banner";
 import { TaskTable } from "./TaskTable/TaskTable";
 import { useDevelopers } from "../../hooks/developers";
 import { useTasks, useUpdateTask } from "../../hooks/tasks";
@@ -47,9 +46,9 @@ export function TaskListPage() {
           Create task
         </Link>
       </div>
-      {notice && <NoticeBanner message={notice} />}
-      {updateTask.error && <ErrorBanner message={updateTask.error.message} />}
-      {loadError && <ErrorBanner message={`Could not load tasks: ${loadError.message}`} />}
+      {notice && <Banner variant="notice" message={notice} />}
+      {updateTask.error && <Banner variant="error" message={updateTask.error.message} />}
+      {loadError && <Banner variant="error" message={`Could not load tasks: ${loadError.message}`} />}
       {!loaded && !loadError && <p>Loading tasks…</p>}
       {loaded && taskList.length === 0 && (
         <p>
