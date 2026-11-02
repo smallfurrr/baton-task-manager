@@ -1,5 +1,8 @@
 import pg from "pg";
 
+/** Anything that can run a query: the pool, or a client inside a transaction. */
+export type Queryable = Pick<pg.Pool, "query">;
+
 let pool: pg.Pool | undefined;
 
 /** Shared connection pool, created on first use from DATABASE_URL. */
