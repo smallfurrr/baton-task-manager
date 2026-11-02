@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ErrorBanner } from "../../components/ErrorBanner";
 import { NoticeBanner } from "../../components/NoticeBanner";
-import { TaskTable } from "./TaskTable";
+import { TaskTable } from "./TaskTable/TaskTable";
 import { useDevelopers } from "../../hooks/developers";
 import { useTasks, useUpdateTask } from "../../hooks/tasks";
 import styles from "./TaskListPage.module.css";

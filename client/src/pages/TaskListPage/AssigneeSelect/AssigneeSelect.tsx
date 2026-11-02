@@ -1,5 +1,5 @@
-import type { Developer } from "../../api/types";
-import styles from "./Select.module.css";
+import { Select } from "../../../components/Select/Select";
+import type { Developer } from "../../../api/types";
 
 interface AssigneeSelectProps {
   label: string;
@@ -13,8 +13,7 @@ interface AssigneeSelectProps {
 
 export function AssigneeSelect({ label, value, developers, disabled, onChange }: AssigneeSelectProps) {
   return (
-    <select
-      className={styles.select}
+    <Select
       aria-label={label}
       value={value === null ? "" : String(value)}
       disabled={disabled}
@@ -26,6 +25,6 @@ export function AssigneeSelect({ label, value, developers, disabled, onChange }:
           {developer.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

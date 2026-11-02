@@ -1,6 +1,6 @@
-import { TASK_STATUSES, type TaskStatus } from "../../api/types";
-import { STATUS_LABELS } from "../../lib/statusLabels";
-import styles from "./Select.module.css";
+import { Select } from "../../../components/Select/Select";
+import { TASK_STATUSES, type TaskStatus } from "../../../api/types";
+import { STATUS_LABELS } from "../../../lib/statusLabels";
 
 interface StatusSelectProps {
   label: string;
@@ -11,8 +11,7 @@ interface StatusSelectProps {
 
 export function StatusSelect({ label, value, disabled, onChange }: StatusSelectProps) {
   return (
-    <select
-      className={styles.select}
+    <Select
       aria-label={label}
       value={value}
       disabled={disabled}
@@ -26,6 +25,6 @@ export function StatusSelect({ label, value, disabled, onChange }: StatusSelectP
           {STATUS_LABELS[status]}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import type { CreateTaskInput, Skill } from "../../api/types";
-import { ErrorBanner } from "../../components/ErrorBanner";
+import type { CreateTaskInput, Skill } from "../../../api/types";
+import { ErrorBanner } from "../../../components/ErrorBanner";
 import styles from "./TaskForm.module.css";
 
 export const MAX_TITLE_LENGTH = 500;

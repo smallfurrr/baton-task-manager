@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ErrorBanner } from "../../components/ErrorBanner";
-import { TaskForm } from "./TaskForm";
+import { TaskForm } from "./TaskForm/TaskForm";
 import { useSkills } from "../../hooks/skills";
 import { useCreateTask } from "../../hooks/tasks";
 
