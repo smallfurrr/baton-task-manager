@@ -3,8 +3,9 @@ import { InvalidReferenceError, NotFoundError, SkillMismatchError } from "../err
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
+import { nestTasks, type Task } from "./taskTree.js";
 
-export type Task = tasks.TaskRow;
+export type { Task };
 
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -14,12 +15,17 @@ export interface CreateTaskInput {
   skillIds: number[];
 }
 
-export function listTasks(): Promise<Task[]> {
-  return tasks.listTasks(getPool());
+/** Top-level tasks, newest first, each with its subtasks nested underneath. */
+export async function listTasks(): Promise<Task[]> {
+  const rows = await tasks.listTasks(getPool());
+  const rootIds = rows.filter((row) => row.parentId === null).map((row) => row.id);
+  return nestTasks(rows, rootIds);
 }
 
+/** One task (top-level or a subtask) with its whole subtree. */
 export async function getTask(id: number): Promise<Task> {
-  const task = await tasks.findTaskById(getPool(), id);
+  const rows = await tasks.findSubtreeRows(getPool(), id);
+  const [task] = nestTasks(rows, [id]);
   if (!task) throw new NotFoundError(`Task ${id} not found`);
   return task;
 }

@@ -32,10 +32,12 @@ describe("POST /api/tasks", () => {
     expect(res.headers.location).toBe(`/api/tasks/${res.body.id}`);
     expect(res.body).toEqual({
       id: expect.any(Number),
+      parentId: null,
       title: "Write the docs",
       status: "todo",
       skills: [],
       assignee: null,
+      subtasks: [],
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
@@ -293,5 +295,109 @@ describe("PATCH /api/tasks/:id", () => {
     const res = await request(app).patch(`/api/tasks/${await createTask("t")}`);
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe("subtasks in task responses", () => {
+  async function insertTask(title: string, parentId: number | null = null): Promise<number> {
+    const { rows } = await getPool().query<{ id: number }>(
+      "INSERT INTO tasks (title, parent_id) VALUES ($1, $2) RETURNING id",
+      [title, parentId],
+    );
+    return rows[0]!.id;
+  }
+
+  /** Compact view of a task tree: "title(child, child(grandchild))" */
+  function render(task: { title: string; subtasks: unknown[] }): string {
+    const children = (task.subtasks as { title: string; subtasks: unknown[] }[]).map(render);
+    return children.length ? `${task.title}(${children.join(", ")})` : task.title;
+  }
+
+  it("lists only top-level tasks, with subtasks nested under them", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    await insertTask("grandchild", child);
+    await insertTask("second root");
+
+    const res = await request(app).get("/api/tasks");
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((t: { title: string }) => t.title)).toEqual(["second root", "root"]);
+    expect(render(res.body[1])).toBe("root(child(grandchild))");
+  });
+
+  it("orders subtasks by creation order, not alphabetically", async () => {
+    const root = await insertTask("root");
+    await insertTask("zebra", root);
+    await insertTask("apple", root);
+
+    const res = await request(app).get("/api/tasks");
+
+    expect(render(res.body[0])).toBe("root(zebra, apple)");
+  });
+
+  it("includes parentId, skills and assignee on nested subtasks", async () => {
+    const frontend = await idOf("skills", "Frontend");
+    const alice = await idOf("developers", "Alice");
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    await getPool().query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [child, frontend]);
+    await getPool().query("UPDATE tasks SET assignee_id = $1 WHERE id = $2", [alice, child]);
+
+    const res = await request(app).get("/api/tasks");
+
+    expect(res.body[0].subtasks[0]).toMatchObject({
+      id: child,
+      parentId: root,
+      skills: [{ id: frontend, name: "Frontend" }],
+      assignee: { id: alice, name: "Alice" },
+      subtasks: [],
+    });
+  });
+
+  it("returns a top-level task with its whole subtree by id", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    await insertTask("grandchild", child);
+    await insertTask("unrelated");
+
+    const res = await request(app).get(`/api/tasks/${root}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.parentId).toBeNull();
+    expect(render(res.body)).toBe("root(child(grandchild))");
+  });
+
+  it("returns a subtask by id with its own subtree, but not its siblings or ancestors", async () => {
+    const root = await insertTask("root");
+    const first = await insertTask("first", root);
+    await insertTask("under first", first);
+    await insertTask("second", root);
+
+    const res = await request(app).get(`/api/tasks/${first}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.parentId).toBe(root);
+    expect(render(res.body)).toBe("first(under first)");
+  });
+
+  it("includes the subtree in the response to a status change", async () => {
+    const root = await insertTask("root");
+    await insertTask("child", root);
+
+    const res = await request(app).patch(`/api/tasks/${root}`).send({ status: "in_progress" });
+
+    expect(res.status).toBe(200);
+    expect(render(res.body)).toBe("root(child)");
+  });
+
+  it("updates a subtask by its own id", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+
+    const res = await request(app).patch(`/api/tasks/${child}`).send({ status: "in_progress" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: child, parentId: root, status: "in_progress" });
   });
 });

@@ -1,8 +1,10 @@
 import type { Queryable } from "../db/pool.js";
 import type { SkillRow } from "./skillRepository.js";
 
+/** One task as stored: subtasks are separate rows pointing at their parent. */
 export interface TaskRow {
   id: number;
+  parentId: number | null;
   title: string;
   status: string;
   skills: SkillRow[];
@@ -12,7 +14,7 @@ export interface TaskRow {
 }
 
 const SELECT_TASK = `
-  SELECT t.id, t.title, t.status,
+  SELECT t.id, t.parent_id AS "parentId", t.title, t.status,
          t.created_at AS "createdAt", t.updated_at AS "updatedAt",
          CASE WHEN d.id IS NULL THEN NULL
               ELSE json_build_object('id', d.id, 'name', d.name) END AS assignee,
@@ -32,6 +34,21 @@ export async function listTasks(db: Queryable): Promise<TaskRow[]> {
 export async function findTaskById(db: Queryable, id: number): Promise<TaskRow | undefined> {
   const { rows } = await db.query<TaskRow>(`${SELECT_TASK} WHERE t.id = $1`, [id]);
   return rows[0];
+}
+
+/** The task and all its descendants, in no particular order. Empty if the task does not exist. */
+export async function findSubtreeRows(db: Queryable, rootId: number): Promise<TaskRow[]> {
+  const { rows } = await db.query<TaskRow>(
+    `WITH RECURSIVE subtree AS (
+       SELECT id FROM tasks WHERE id = $1
+       UNION ALL
+       SELECT t.id FROM tasks t JOIN subtree s ON t.parent_id = s.id
+     )
+     ${SELECT_TASK}
+     WHERE t.id IN (SELECT id FROM subtree)`,
+    [rootId],
+  );
+  return rows;
 }
 
 export async function insertTask(db: Queryable, title: string): Promise<number> {
