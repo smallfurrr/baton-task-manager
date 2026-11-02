@@ -1,7 +1,8 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Skill } from "../../../api/types";
+import { MAX_DEPTH, MAX_NODES } from "../../../lib/taskFormTree";
 import { renderWithProviders } from "../../../test/render";
 import { TaskForm } from "./TaskForm";
 
@@ -130,5 +131,180 @@ describe("TaskForm", () => {
     renderForm();
 
     expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/");
+  });
+});
+
+describe("TaskForm: subtasks", () => {
+  const group = (name: string) => within(screen.getByRole("group", { name }));
+  const addSubtaskTo = (label: string) => userEvent.click(screen.getByRole("button", { name: `Add subtask to ${label}` }));
+  const typeTitle = (label: string, text: string) =>
+    userEvent.type(group(label).getByRole("textbox", { name: "Title" }), text);
+
+  it("starts with one task that can be given subtasks, and nothing to remove", () => {
+    renderForm();
+
+    expect(screen.getByRole("group", { name: "Task 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add subtask to Task 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+  });
+
+  it("adds subtasks and nested subtasks as new fields on the same page", async () => {
+    renderForm();
+
+    await addSubtaskTo("Task 1");
+    await addSubtaskTo("Task 1");
+    await addSubtaskTo("Subtask 1.1");
+
+    for (const label of ["Task 1", "Subtask 1.1", "Subtask 1.1.1", "Subtask 1.2"]) {
+      expect(screen.getByRole("group", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("moves focus to the title of a newly added subtask", async () => {
+    renderForm();
+
+    await addSubtaskTo("Task 1");
+
+    expect(group("Subtask 1.1").getByRole("textbox", { name: "Title" })).toHaveFocus();
+  });
+
+  it("removes a subtask with everything beneath it, and renumbers the rest", async () => {
+    renderForm();
+    await addSubtaskTo("Task 1");
+    await addSubtaskTo("Task 1");
+    await addSubtaskTo("Subtask 1.1");
+    await typeTitle("Subtask 1.2", "keeper");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Subtask 1.1" }));
+
+    expect(screen.queryByRole("group", { name: "Subtask 1.1.1" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("group", { name: /Subtask/ })).toHaveLength(1);
+    expect(group("Subtask 1.1").getByRole("textbox", { name: "Title" })).toHaveValue("keeper");
+  });
+
+  it("keeps what was typed in other tasks when one is added or removed", async () => {
+    renderForm();
+    await typeTitle("Task 1", "root");
+    await addSubtaskTo("Task 1");
+    await typeTitle("Subtask 1.1", "first");
+    await addSubtaskTo("Task 1");
+    await typeTitle("Subtask 1.2", "second");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Subtask 1.1" }));
+
+    expect(group("Task 1").getByRole("textbox", { name: "Title" })).toHaveValue("root");
+    expect(group("Subtask 1.1").getByRole("textbox", { name: "Title" })).toHaveValue("second");
+  });
+
+  it("gives each task its own skills", async () => {
+    renderForm();
+    await addSubtaskTo("Task 1");
+
+    await userEvent.click(group("Task 1").getByRole("checkbox", { name: "Frontend" }));
+    await userEvent.click(group("Subtask 1.1").getByRole("checkbox", { name: "Backend" }));
+
+    expect(group("Task 1").getByRole("checkbox", { name: "Frontend" })).toBeChecked();
+    expect(group("Task 1").getByRole("checkbox", { name: "Backend" })).not.toBeChecked();
+    expect(group("Subtask 1.1").getByRole("checkbox", { name: "Frontend" })).not.toBeChecked();
+    expect(group("Subtask 1.1").getByRole("checkbox", { name: "Backend" })).toBeChecked();
+  });
+
+  it("submits the whole tree in one nested payload", async () => {
+    const onSubmit = renderForm();
+    await typeTitle("Task 1", "Profile page");
+    await userEvent.click(group("Task 1").getByRole("checkbox", { name: "Frontend" }));
+    await addSubtaskTo("Task 1");
+    await typeTitle("Subtask 1.1", "Upload endpoint");
+    await userEvent.click(group("Subtask 1.1").getByRole("checkbox", { name: "Backend" }));
+    await addSubtaskTo("Subtask 1.1");
+    await typeTitle("Subtask 1.1.1", "  Resize images  ");
+    await addSubtaskTo("Task 1");
+    await typeTitle("Subtask 1.2", "Avatar picker");
+
+    await userEvent.click(save());
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({
+      title: "Profile page",
+      skillIds: [1],
+      subtasks: [
+        {
+          title: "Upload endpoint",
+          skillIds: [2],
+          subtasks: [{ title: "Resize images", skillIds: [], subtasks: [] }],
+        },
+        { title: "Avatar picker", skillIds: [], subtasks: [] },
+      ],
+    });
+  });
+
+  it("blocks saving while a subtask has no title, pointing at that subtask only", async () => {
+    const onSubmit = renderForm();
+    await typeTitle("Task 1", "Root");
+    await addSubtaskTo("Task 1");
+    await addSubtaskTo("Task 1");
+    await typeTitle("Subtask 1.2", "Fine");
+
+    await userEvent.click(save());
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(group("Subtask 1.1").getByRole("textbox", { name: "Title" })).toBeInvalid();
+    expect(group("Task 1").getByRole("textbox", { name: "Title" })).toBeValid();
+    expect(group("Subtask 1.2").getByRole("textbox", { name: "Title" })).toBeValid();
+    expect(screen.getAllByText("Enter a title for the task.")).toHaveLength(1);
+  });
+
+  it("lets the user save once the missing subtask title is filled in", async () => {
+    const onSubmit = renderForm();
+    await typeTitle("Task 1", "Root");
+    await addSubtaskTo("Task 1");
+    await userEvent.click(save());
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await typeTitle("Subtask 1.1", "Now named");
+    await userEvent.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      title: "Root",
+      skillIds: [],
+      subtasks: [{ title: "Now named", skillIds: [], subtasks: [] }],
+    });
+  });
+
+  it("lets the user save after removing a subtask that was left blank", async () => {
+    const onSubmit = renderForm();
+    await typeTitle("Task 1", "Root");
+    await addSubtaskTo("Task 1");
+    await userEvent.click(save());
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Subtask 1.1" }));
+    await userEvent.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith({ title: "Root", skillIds: [], subtasks: [] });
+  });
+
+  it(`stops adding subtasks at ${MAX_DEPTH} levels deep`, async () => {
+    renderForm();
+    let label = "Task 1";
+    for (let level = 1; level < MAX_DEPTH; level++) {
+      await addSubtaskTo(label);
+      label = `Subtask ${"1.".repeat(level)}1`.replace(/\.$/, "");
+    }
+
+    expect(screen.getByRole("button", { name: `Add subtask to ${label}` })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add subtask to Task 1" })).toBeEnabled();
+  });
+
+  it(`stops adding subtasks once the form holds ${MAX_NODES} tasks`, async () => {
+    const user = userEvent.setup({ delay: null });
+    renderForm();
+
+    for (let added = 1; added < MAX_NODES; added++) {
+      await user.click(screen.getByRole("button", { name: "Add subtask to Task 1" }));
+    }
+
+    expect(screen.getAllByRole("group", { name: /^(Task|Subtask) / })).toHaveLength(MAX_NODES);
+    expect(screen.getByRole("button", { name: "Add subtask to Task 1" })).toBeDisabled();
   });
 });

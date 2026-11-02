@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
@@ -48,6 +48,60 @@ describe("task creation flow", () => {
       "/api/tasks",
       expect.objectContaining({ method: "POST", body: '{"title":"Profile page","skillIds":[1,2],"subtasks":[]}' }),
     );
+  });
+
+  it("saves a task with nested subtasks in one request and shows them nested on the list", async () => {
+    const nested: Task = {
+      ...createdTask,
+      title: "Profile page",
+      skills: [skills[0]!],
+      subtasks: [
+        {
+          ...createdTask,
+          id: 6,
+          parentId: 5,
+          title: "Upload endpoint",
+          skills: [skills[1]!],
+          subtasks: [{ ...createdTask, id: 7, parentId: 6, title: "Resize images", skills: [] }],
+        },
+      ],
+    };
+    let tasks: Task[] = [];
+    const fetchMock = mockApi({
+      "GET /api/skills": jsonResponse(skills),
+      "GET /api/developers": jsonResponse([]),
+      "GET /api/tasks": () => jsonResponse(tasks),
+      "POST /api/tasks": () => {
+        tasks = [nested];
+        return jsonResponse(nested, 201);
+      },
+    });
+    renderWithProviders(<App />, "/tasks/new");
+
+    const title = (label: string) => within(screen.getByRole("group", { name: label })).getByRole("textbox", { name: "Title" });
+    await userEvent.type(await screen.findByRole("textbox", { name: "Title" }), "Profile page");
+    await userEvent.click(within(screen.getByRole("group", { name: "Task 1" })).getByRole("checkbox", { name: "Frontend" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add subtask to Task 1" }));
+    await userEvent.type(title("Subtask 1.1"), "Upload endpoint");
+    await userEvent.click(within(screen.getByRole("group", { name: "Subtask 1.1" })).getByRole("checkbox", { name: "Backend" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add subtask to Subtask 1.1" }));
+    await userEvent.type(title("Subtask 1.1.1"), "Resize images");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Task created");
+    expect(await screen.findByText("Resize images")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(4); // header + 3 tasks
+    expect(JSON.parse(fetchMock.mock.calls.find(([, init]) => init?.method === "POST")![1]!.body!)).toEqual({
+      title: "Profile page",
+      skillIds: [1],
+      subtasks: [
+        {
+          title: "Upload endpoint",
+          skillIds: [2],
+          subtasks: [{ title: "Resize images", skillIds: [], subtasks: [] }],
+        },
+      ],
+    });
   });
 
   it("creates a task with no skills", async () => {
