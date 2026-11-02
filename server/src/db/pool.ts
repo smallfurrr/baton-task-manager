@@ -22,3 +22,19 @@ export async function closePool(): Promise<void> {
   pool = undefined;
   await current?.end();
 }
+
+/** Run `fn` in a transaction, committing on success and rolling back on any error. */
+export async function withTransaction<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}

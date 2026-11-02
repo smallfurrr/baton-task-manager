@@ -24,3 +24,11 @@ export class ValidationError extends AppError {
     this.name = "ValidationError";
   }
 }
+
+/** The request is well-formed but refers to something that does not exist. */
+export class InvalidReferenceError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(422, "INVALID_REFERENCE", message, details);
+    this.name = "InvalidReferenceError";
+  }
+}
