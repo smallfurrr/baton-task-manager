@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "migrate": "node --env-file-if-exists=../.env node_modules/node-pg-migrate/bin/node-pg-migrate.js up -m migrations",
-    "migrate:down": "node --env-file-if-exists=../.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations"
+    "migrate:down": "node --env-file-if-exists=../.env node_modules/node-pg-migrate/bin/node-pg-migrate.js down -m migrations",
+    "seed": "tsx --env-file-if-exists=../.env src/db/seed.ts"
   },
   "dependencies": {
     "express": "^5.3.0",
