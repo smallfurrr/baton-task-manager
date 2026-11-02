@@ -9,28 +9,24 @@ export function TaskCreatePage() {
   const skills = useSkills();
   const createTask = useCreateTask();
 
-  function renderBody() {
-    if (skills.error) return <ErrorBanner message={`Could not load skills: ${skills.error.message}`} />;
-    if (!skills.data) return <p>Loading…</p>;
-    return (
-      <TaskForm
-        skills={skills.data}
-        submitting={createTask.isPending}
-        submitError={createTask.error?.message}
-        onSubmit={(input) =>
-          createTask.mutate(input, {
-            // The list refetches on success (see useCreateTask), so the new task is already there.
-            onSuccess: () => navigate("/", { state: { notice: "Task created" } }),
-          })
-        }
-      />
-    );
-  }
-
   return (
     <section>
       <h2>Create Task</h2>
-      {renderBody()}
+      {skills.error && <ErrorBanner message={`Could not load skills: ${skills.error.message}`} />}
+      {!skills.error && !skills.data && <p>Loading…</p>}
+      {skills.data && (
+        <TaskForm
+          skills={skills.data}
+          submitting={createTask.isPending}
+          submitError={createTask.error?.message}
+          onSubmit={(input) =>
+            createTask.mutate(input, {
+              // The list refetches on success (see useCreateTask), so the new task is already there.
+              onSuccess: () => navigate("/", { state: { notice: "Task created" } }),
+            })
+          }
+        />
+      )}
     </section>
   );
 }

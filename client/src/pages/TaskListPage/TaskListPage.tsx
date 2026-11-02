@@ -35,26 +35,9 @@ export function TaskListPage() {
 
   const loadError = tasks.error ?? developers.error;
   const pendingTaskId = updateTask.isPending ? updateTask.variables.id : null;
-
-  function renderBody() {
-    if (loadError) return <ErrorBanner message={`Could not load tasks: ${loadError.message}`} />;
-    if (!tasks.data || !developers.data) return <p>Loading tasks…</p>;
-    if (tasks.data.length === 0) {
-      return (
-        <p>
-          No tasks yet. <Link to="/tasks/new">Create the first one</Link>.
-        </p>
-      );
-    }
-    return (
-      <TaskTable
-        tasks={tasks.data}
-        developers={developers.data}
-        pendingTaskId={pendingTaskId}
-        onUpdate={(id, changes) => updateTask.mutate({ id, changes })}
-      />
-    );
-  }
+  const taskList = tasks.data;
+  const developerList = developers.data;
+  const loaded = taskList !== undefined && developerList !== undefined;
 
   return (
     <section>
@@ -66,7 +49,21 @@ export function TaskListPage() {
       </div>
       {notice && <NoticeBanner message={notice} />}
       {updateTask.error && <ErrorBanner message={updateTask.error.message} />}
-      {renderBody()}
+      {loadError && <ErrorBanner message={`Could not load tasks: ${loadError.message}`} />}
+      {!loaded && !loadError && <p>Loading tasks…</p>}
+      {loaded && taskList.length === 0 && (
+        <p>
+          No tasks yet. <Link to="/tasks/new">Create the first one</Link>.
+        </p>
+      )}
+      {loaded && taskList.length > 0 && (
+        <TaskTable
+          tasks={taskList}
+          developers={developerList}
+          pendingTaskId={pendingTaskId}
+          onUpdate={(id, changes) => updateTask.mutate({ id, changes })}
+        />
+      )}
     </section>
   );
 }
