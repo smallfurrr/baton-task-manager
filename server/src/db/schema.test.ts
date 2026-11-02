@@ -5,6 +5,7 @@ import { assertTestDatabase, resetDatabase } from "../test/db.js";
 
 const UNIQUE_VIOLATION = "23505";
 const CHECK_VIOLATION = "23514";
+const FOREIGN_KEY_VIOLATION = "23503";
 
 let pool: pg.Pool;
 
@@ -90,5 +91,85 @@ describe("schema constraints", () => {
 
     const { rows } = await pool.query("SELECT assignee_id FROM tasks WHERE id = $1", [taskId]);
     expect(rows[0]).toEqual({ assignee_id: null });
+  });
+});
+
+describe("subtasks (parent_id)", () => {
+  async function insertTask(title: string, parentId: number | null = null): Promise<number> {
+    return insertId("INSERT INTO tasks (title, parent_id) VALUES ($1, $2)", [title, parentId]);
+  }
+
+  async function titles(): Promise<string[]> {
+    const { rows } = await pool.query<{ title: string }>("SELECT title FROM tasks ORDER BY id");
+    return rows.map((row) => row.title);
+  }
+
+  it("defaults a new task to having no parent", async () => {
+    const { rows } = await pool.query("INSERT INTO tasks (title) VALUES ('t') RETURNING parent_id");
+
+    expect(rows[0]).toEqual({ parent_id: null });
+  });
+
+  it("stores a subtask under its parent, to any depth", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    const grandchild = await insertTask("grandchild", child);
+
+    const { rows } = await pool.query("SELECT id, parent_id FROM tasks WHERE id = $1", [grandchild]);
+    expect(rows[0]).toEqual({ id: grandchild, parent_id: child });
+  });
+
+  it("rejects a parent that does not exist", async () => {
+    await expectPgError(pool.query("INSERT INTO tasks (title, parent_id) VALUES ('t', 999999)"), FOREIGN_KEY_VIOLATION);
+  });
+
+  it("rejects a task being its own parent", async () => {
+    const id = await insertTask("t");
+
+    await expectPgError(pool.query("UPDATE tasks SET parent_id = id WHERE id = $1", [id]), CHECK_VIOLATION);
+  });
+
+  it("deletes a task's whole subtree with it, leaving unrelated tasks", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    await insertTask("grandchild", child);
+    await insertTask("unrelated");
+
+    await pool.query("DELETE FROM tasks WHERE id = $1", [root]);
+
+    expect(await titles()).toEqual(["unrelated"]);
+  });
+
+  it("leaves the parent and siblings when a subtask is deleted", async () => {
+    const root = await insertTask("root");
+    const first = await insertTask("first", root);
+    await insertTask("second", root);
+    await insertTask("under first", first);
+
+    await pool.query("DELETE FROM tasks WHERE id = $1", [first]);
+
+    expect(await titles()).toEqual(["root", "second"]);
+  });
+
+  it("keeps a subtask's skills separate from its parent's", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    const skillId = await insertId("INSERT INTO skills (name) VALUES ('Frontend')");
+    await pool.query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [child, skillId]);
+
+    const { rows } = await pool.query("SELECT task_id FROM task_skills");
+    expect(rows).toEqual([{ task_id: child }]);
+  });
+
+  it("removes a deleted subtask's skill links with it", async () => {
+    const root = await insertTask("root");
+    const child = await insertTask("child", root);
+    const skillId = await insertId("INSERT INTO skills (name) VALUES ('Frontend')");
+    await pool.query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [child, skillId]);
+
+    await pool.query("DELETE FROM tasks WHERE id = $1", [root]);
+
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM task_skills");
+    expect(rows[0]).toEqual({ n: 0 });
   });
 });
