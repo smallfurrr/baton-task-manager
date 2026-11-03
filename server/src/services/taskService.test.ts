@@ -10,12 +10,9 @@ import {
 } from "../errors.js";
 import { resetDatabase } from "../test/db.js";
 import { fakeClassifier } from "../test/fakeClassifier.js";
+import { idOf, taskCount } from "../test/fixtures.js";
+import { chain } from "../test/trees.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
-
-async function idOf(table: "skills" | "developers", name: string): Promise<number> {
-  const { rows } = await getPool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1`, [name]);
-  return rows[0]!.id;
-}
 
 function assignTask(taskId: number, assigneeId: number | null) {
   return updateTask(taskId, { assigneeId });
@@ -34,7 +31,7 @@ beforeEach(async () => {
 
 afterAll(closePool);
 
-describe("assignTask: skill rule", () => {
+describe("updateTask: skill rule", () => {
   it("lets Carol (Frontend + Backend) take a Frontend + Backend task", async () => {
     const taskId = await taskRequiring("Frontend", "Backend");
     const carol = await idOf("developers", "Carol");
@@ -106,7 +103,7 @@ describe("assignTask: skill rule", () => {
   });
 });
 
-describe("assignTask: other cases", () => {
+describe("updateTask: assignee cases", () => {
   it("clears the assignee with null", async () => {
     const taskId = await taskRequiring("Backend");
     await assignTask(taskId, await idOf("developers", "Bob"));
@@ -450,20 +447,78 @@ describe("updateTask: reopening Done ancestors", () => {
   });
 });
 
+describe("updateTask: concurrent status changes", () => {
+  const sleep = (ms: number) => new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), ms));
+
+  async function forceDone(...ids: number[]): Promise<void> {
+    await getPool().query("UPDATE tasks SET status = 'done' WHERE id = ANY($1::int[])", [ids]);
+  }
+
+  /** Hold the lock on a tree's root, as a concurrent status change would, until `release` is called. */
+  async function holdRootLock(rootId: number): Promise<{ release: () => Promise<void> }> {
+    const client = await getPool().connect();
+    await client.query("BEGIN");
+    await client.query("SELECT id FROM tasks WHERE id = $1 FOR NO KEY UPDATE", [rootId]);
+    return {
+      release: async () => {
+        await client.query("COMMIT");
+        client.release();
+      },
+    };
+  }
+
+  it("makes a status change wait while another change holds the tree's lock", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "leaf" }] }] });
+    const lock = await holdRootLock(ids.root!);
+
+    const change = setStatus(ids.leaf!, "in_progress"); // a deep task is locked through its root
+    try {
+      expect(await Promise.race([change, sleep(150)])).toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+    expect((await change).status).toBe("in_progress");
+  });
+
+  it("does not make an assignee-only change wait", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    const lock = await holdRootLock(ids.root!);
+
+    try {
+      const task = await Promise.race([assignTask(ids.child!, await idOf("developers", "Alice")), sleep(150)]);
+      expect(task).not.toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+  });
+
+  it("does not make changes in another tree wait", async () => {
+    const mine = await createTree({ title: "mine", subtasks: [{ title: "mine child" }] });
+    const other = await createTree({ title: "other" });
+    const lock = await holdRootLock(mine.mine!);
+
+    try {
+      expect(await Promise.race([setStatus(other.other!, "in_progress"), sleep(150)])).not.toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+  });
+
+  it("never leaves a Done parent above an unfinished child when Done and reopen race", async () => {
+    for (let round = 0; round < 20; round++) {
+      const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+      // The child is Done and the parent is not: race "parent -> Done" against "child -> To-do".
+      await forceDone(ids.child!);
+
+      await Promise.allSettled([setStatus(ids.root!, "done"), setStatus(ids.child!, "todo")]);
+
+      const [root, child] = await Promise.all([statusOf(ids.root!), statusOf(ids.child!)]);
+      expect(root === "done" && child !== "done", `round ${round}: root ${root}, child ${child}`).toBe(false);
+    }
+  });
+});
+
 describe("createTask: size limits", () => {
-  type Node = { title: string; skillIds: number[]; subtasks: Node[] };
-
-  function chain(levels: number): Node {
-    let node: Node = { title: "leaf", skillIds: [], subtasks: [] };
-    for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, skillIds: [], subtasks: [node] };
-    return node;
-  }
-
-  async function taskCount(): Promise<number> {
-    const { rows } = await getPool().query<{ n: number }>("SELECT count(*)::int AS n FROM tasks");
-    return rows[0]!.n;
-  }
-
   it("accepts three levels: task, subtask, sub-subtask", async () => {
     await createTask(chain(3));
 

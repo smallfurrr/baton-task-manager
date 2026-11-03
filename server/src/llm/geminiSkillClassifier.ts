@@ -1,7 +1,9 @@
-import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
+import { noopSkillClassifier, type SkillClassifier } from "../services/skillClassifier.js";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_TIMEOUT_MS = 8000;
+/** Used when `GEMINI_MODEL` is unset or blank. This is the only place the default is written down. */
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const SYSTEM_INSTRUCTION = [
   "You tag software tasks with the skills needed to do them.",
@@ -95,5 +97,5 @@ export function classifierFromEnv(env: NodeJS.ProcessEnv): SkillClassifier {
     console.warn("GEMINI_API_KEY is not set: tasks created without skills will stay untagged");
     return noopSkillClassifier;
   }
-  return new GeminiSkillClassifier({ apiKey, model: env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite" });
+  return new GeminiSkillClassifier({ apiKey, model: env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL });
 }

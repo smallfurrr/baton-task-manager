@@ -2,8 +2,8 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
-# tsconfig.json also covers vite.config.ts and eslint.config.js, so the build needs them.
-COPY index.html tsconfig.json vite.config.ts eslint.config.js ./
+# tsconfig.json also covers vite.config.ts, so the build needs it.
+COPY index.html tsconfig.json vite.config.ts ./
 COPY src ./src
 RUN npm run build
 

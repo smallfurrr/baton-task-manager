@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Skill } from "../api/types";
 import {
   addSubtask,
+  addSubtaskBlockedReason,
   canAddSubtask,
   countNodes,
   depthOf,
@@ -97,6 +98,24 @@ describe("addSubtask", () => {
     expect(countNodes(full)).toBe(MAX_NODES);
     expect(canAddSubtask(full, "root")).toBe(false);
     expect(addSubtask(full, "root", node("one too many"))).toBe(full);
+  });
+});
+
+describe("addSubtaskBlockedReason", () => {
+  it("allows a subtask below the depth and size limits", () => {
+    expect(addSubtaskBlockedReason(MAX_DEPTH - 1, MAX_NODES - 1)).toBeUndefined();
+  });
+
+  it("names the depth limit at the deepest level", () => {
+    expect(addSubtaskBlockedReason(MAX_DEPTH, 1)).toBe(`Subtasks can only be nested ${MAX_DEPTH} levels deep`);
+  });
+
+  it("names the size limit once the form is full", () => {
+    expect(addSubtaskBlockedReason(1, MAX_NODES)).toBe(`A request can create at most ${MAX_NODES} tasks`);
+  });
+
+  it("reports the depth limit when both limits are hit", () => {
+    expect(addSubtaskBlockedReason(MAX_DEPTH, MAX_NODES)).toContain("levels deep");
   });
 });
 

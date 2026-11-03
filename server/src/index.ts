@@ -1,5 +1,5 @@
 import { createApp } from "./app.js";
-import { classifierFromEnv } from "./services/geminiSkillClassifier.js";
+import { classifierFromEnv } from "./llm/geminiSkillClassifier.js";
 
 const port = Number(process.env.PORT ?? 3000);
 

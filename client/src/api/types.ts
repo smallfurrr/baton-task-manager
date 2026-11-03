@@ -1,3 +1,5 @@
+import type { TaskStatus } from "../domain/taskStatus";
+
 /** Shapes returned by the API. Kept in sync by hand with the server's responses. */
 
 export interface Skill {
@@ -15,9 +17,6 @@ export interface Developer {
   name: string;
   skills: Skill[];
 }
-
-export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export interface Task {
   id: number;

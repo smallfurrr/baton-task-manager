@@ -1,8 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifierFromEnv, GeminiSkillClassifier, parseSkillNames } from "./geminiSkillClassifier.js";
-import { noopSkillClassifier } from "./skillClassifier.js";
+import {
+  classifierFromEnv,
+  DEFAULT_GEMINI_MODEL,
+  GeminiSkillClassifier,
+  parseSkillNames,
+} from "./geminiSkillClassifier.js";
+import { noopSkillClassifier } from "../services/skillClassifier.js";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function geminiReply(text: string): Response {
   return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
@@ -120,8 +128,22 @@ describe("classifierFromEnv", () => {
   });
 
   it("uses Gemini when a key is set", () => {
-    expect(classifierFromEnv({ GEMINI_API_KEY: "abc", GEMINI_MODEL: "gemini-3.5-flash-lite" })).toBeInstanceOf(
-      GeminiSkillClassifier,
-    );
+    expect(classifierFromEnv({ GEMINI_API_KEY: "abc" })).toBeInstanceOf(GeminiSkillClassifier);
+  });
+
+  /** The model named in the URL of the one request the classifier makes. */
+  async function modelRequestedFor(env: NodeJS.ProcessEnv): Promise<string | undefined> {
+    const fetchFn = vi.fn<typeof fetch>(async () => geminiReply("[]"));
+    vi.stubGlobal("fetch", fetchFn);
+    await classifierFromEnv(env).classify("T", ["Backend"]);
+    return /\/models\/([^:]+):/.exec(String(fetchFn.mock.calls[0]![0]))?.[1];
+  }
+
+  it.each([undefined, "", "   "])("uses the default model when GEMINI_MODEL is %j", async (model) => {
+    expect(await modelRequestedFor({ GEMINI_API_KEY: "abc", GEMINI_MODEL: model })).toBe(DEFAULT_GEMINI_MODEL);
+  });
+
+  it("uses GEMINI_MODEL when it is set", async () => {
+    expect(await modelRequestedFor({ GEMINI_API_KEY: "abc", GEMINI_MODEL: " gemini-test " })).toBe("gemini-test");
   });
 });

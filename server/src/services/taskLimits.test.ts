@@ -1,15 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "../errors.js";
+import { chain } from "../test/trees.js";
 import { checkTreeLimits, MAX_TASK_DEPTH, MAX_TASKS_PER_REQUEST } from "./taskLimits.js";
 
 type Node = { title: string; subtasks: Node[] };
-
-/** A chain `levels` deep: each task has one subtask. */
-function chain(levels: number): Node {
-  let node: Node = { title: "leaf", subtasks: [] };
-  for (let level = 1; level < levels; level++) node = { title: "link", subtasks: [node] };
-  return node;
-}
 
 /** A root with `count - 1` direct subtasks, `count` tasks in total. */
 function wide(count: number): Node {

@@ -1,15 +1,19 @@
 import type { Queryable } from "../db/pool.js";
+import type { OpenSubtask, TaskStatus } from "../domain/task.js";
 import type { SkillRow } from "./skillRepository.js";
 
 /** A skill on a task, and whether the classifier (not the user) added it. */
 export type TaskSkill = SkillRow & { addedByAi: boolean };
 
-/** One task as stored: subtasks are separate rows pointing at their parent. */
+/**
+ * One task as stored: subtasks are separate rows pointing at their parent.
+ * `status` is typed as `TaskStatus` because the database CHECK guarantees it.
+ */
 export interface TaskRow {
   id: number;
   parentId: number | null;
   title: string;
-  status: string;
+  status: TaskStatus;
   skills: TaskSkill[];
   assignee: { id: number; name: string } | null;
   createdAt: Date;
@@ -55,11 +59,8 @@ export async function findSubtreeRows(db: Queryable, rootId: number): Promise<Ta
 }
 
 /** Every descendant (children, grandchildren, ...) of the task that is not Done, in creation order. */
-export async function findOpenDescendants(
-  db: Queryable,
-  taskId: number,
-): Promise<Array<{ id: number; title: string; status: string }>> {
-  const { rows } = await db.query<{ id: number; title: string; status: string }>(
+export async function findOpenDescendants(db: Queryable, taskId: number): Promise<OpenSubtask[]> {
+  const { rows } = await db.query<OpenSubtask>(
     `WITH RECURSIVE descendants AS (
        SELECT id, title, status FROM tasks WHERE parent_id = $1
        UNION ALL
@@ -69,6 +70,26 @@ export async function findOpenDescendants(
     [taskId],
   );
   return rows;
+}
+
+/**
+ * Lock the root row of the tree the task belongs to, until the transaction ends.
+ * Status changes take this first, so two of them in one tree run one at a time and
+ * the second reads what the first committed. `NO KEY UPDATE` does not conflict with
+ * the foreign-key checks on the root's children.
+ */
+export async function lockTaskTree(db: Queryable, taskId: number): Promise<void> {
+  await db.query(
+    `WITH RECURSIVE chain AS (
+       SELECT id, parent_id FROM tasks WHERE id = $1
+       UNION ALL
+       SELECT t.id, t.parent_id FROM tasks t JOIN chain c ON t.id = c.parent_id
+     )
+     SELECT id FROM tasks
+     WHERE id = (SELECT id FROM chain WHERE parent_id IS NULL)
+     FOR NO KEY UPDATE`,
+    [taskId],
+  );
 }
 
 export async function insertTask(db: Queryable, title: string, parentId: number | null): Promise<number> {
@@ -100,7 +121,7 @@ export async function findExistingSkillIds(db: Queryable, ids: number[]): Promis
 }
 
 export interface TaskChanges {
-  status?: string;
+  status?: TaskStatus;
   /** `null` clears the assignee; `undefined` leaves it unchanged. */
   assigneeId?: number | null;
 }
@@ -124,19 +145,17 @@ export async function updateTask(db: Queryable, taskId: number, changes: TaskCha
 
 /**
  * Move every Done ancestor of the task (parent, grandparent, ...) back to In
- * progress, whatever the status of the ancestors between. Returns the ids reopened.
+ * progress, whatever the status of the ancestors between.
  */
-export async function reopenDoneAncestors(db: Queryable, taskId: number): Promise<number[]> {
-  const { rows } = await db.query<{ id: number }>(
+export async function reopenDoneAncestors(db: Queryable, taskId: number): Promise<void> {
+  await db.query(
     `WITH RECURSIVE ancestors AS (
        SELECT parent_id AS id FROM tasks WHERE id = $1 AND parent_id IS NOT NULL
        UNION ALL
        SELECT t.parent_id FROM tasks t JOIN ancestors a ON t.id = a.id WHERE t.parent_id IS NOT NULL
      )
      UPDATE tasks SET status = 'in_progress', updated_at = now()
-     WHERE id IN (SELECT id FROM ancestors) AND status = 'done'
-     RETURNING id`,
+     WHERE id IN (SELECT id FROM ancestors) AND status = 'done'`,
     [taskId],
   );
-  return rows.map((row) => row.id);
 }

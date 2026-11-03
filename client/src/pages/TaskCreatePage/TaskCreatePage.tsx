@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Banner } from "../../components/Banner/Banner";
 import { TaskForm } from "./TaskForm/TaskForm";
+import type { NavigationNoticeState } from "../../hooks/navigationNotice";
 import { useSkills } from "../../hooks/skills";
 import { useCreateTask } from "../../hooks/tasks";
 
@@ -22,7 +23,7 @@ export function TaskCreatePage() {
           onSubmit={(input) =>
             createTask.mutate(input, {
               // The list refetches on success (see useCreateTask), so the new task is already there.
-              onSuccess: () => navigate("/", { state: { notice: "Task created" } }),
+              onSuccess: () => navigate("/", { state: { notice: "Task created" } satisfies NavigationNoticeState }),
             })
           }
         />

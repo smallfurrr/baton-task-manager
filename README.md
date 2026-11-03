@@ -1,5 +1,7 @@
 # Baton: skill-based task assignment
 
+[![CI](https://github.com/smallfurrr/baton-task-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/smallfurrr/baton-task-manager/actions/workflows/ci.yml)
+
 A task manager where tasks need skills and can only go to developers who have all of them. Tasks can have nested subtasks, and an LLM tags tasks that are created without skills.
 
 - Skill-restricted assignment, enforced on the server.
@@ -38,7 +40,7 @@ Set these in `.env`.
 | `PORT` | API port (3000) |
 | `DATABASE_URL` | Database URL when running the server outside Docker |
 | `GEMINI_API_KEY` | Key for skill tagging. Without it the app still works; tasks just stay untagged |
-| `GEMINI_MODEL` | Default `gemini-3.5-flash-lite` |
+| `GEMINI_MODEL` | Optional. Overrides the server's default Gemini model (set in `server/src/llm/geminiSkillClassifier.ts`) |
 
 A variable already set in your shell overrides `.env`.
 
@@ -59,6 +61,7 @@ In each package: `npm test`, `npm run lint`, `npm run typecheck`. Server tests n
 - **Server:** Vitest and supertest against a real PostgreSQL test database. A fake classifier stands in for the LLM, so no test calls Gemini.
 - **Client:** Vitest and React Testing Library.
 - Every business rule below has tests.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs lint, typecheck, tests and the build for the server (against a PostgreSQL service) and the client on every push to `main` and every pull request. A third job builds the whole Docker stack from `.env.example` and runs `scripts/smoke-test.sh` against it: seed data, task creation, and the Done and skill rules through the real nginx proxy. Run the same check locally with `scripts/smoke-test.sh` while the stack is up (needs `curl` and `jq`).
 
 ## System design
 
@@ -161,6 +164,7 @@ Errors share one shape:
 | 409 | `SKILL_MISMATCH`, `INCOMPLETE_SUBTASKS` |
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `INVALID_REFERENCE` |
+| 500 | `INTERNAL_ERROR` |
 
 ## Libraries
 
@@ -183,6 +187,7 @@ No component library: the UI is a table, a form and selects, so native elements 
 - A task with no skills can be assigned to anyone.
 - Skills and developers are read-only, and a task's skills can't change after creation.
 - Developer names are unique. A real system would use a stable key such as an email.
+- Skill names are assumed to differ ignoring case ("Frontend" and "frontend" would clash). The database only enforces exact uniqueness, which is enough because skills are seeded and read-only. The classifier matches names ignoring case.
 - Tasks are created unassigned; assign them from the list.
 - Reopening a subtask of a Done task is allowed and moves its Done ancestors to In progress. Other ancestors are left alone.
 - Nesting is capped at 3 levels (task, subtask, sub-subtask). It is a product limit, not a schema limit.
@@ -193,7 +198,7 @@ No component library: the UI is a table, a form and selects, so native elements 
 
 ```
 client/    React app and its nginx config
-server/    Express API and SQL migrations
+server/    Express API (routes, services, repositories, domain, llm, lib) and SQL migrations
 docs/      Screenshots
 docker-compose.yml
 ```

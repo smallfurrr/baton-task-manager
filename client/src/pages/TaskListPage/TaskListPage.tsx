@@ -1,37 +1,17 @@
-import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Banner } from "../../components/Banner/Banner";
 import { buttonClassName } from "../../components/Button/Button";
 import { TaskTable } from "./TaskTable/TaskTable";
 import { useDevelopers } from "../../hooks/developers";
+import { useNavigationNotice } from "../../hooks/navigationNotice";
 import { useTasks, useUpdateTask } from "../../hooks/tasks";
 import styles from "./TaskListPage.module.css";
 
-/** Router state set by other pages to show a one-off message here. */
-interface ListLocationState {
-  notice?: string;
-}
-
-function readNotice(state: unknown): string | undefined {
-  if (typeof state === "object" && state !== null && "notice" in state) {
-    const { notice } = state as ListLocationState;
-    return typeof notice === "string" ? notice : undefined;
-  }
-  return undefined;
-}
-
 export function TaskListPage() {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const notice = useNavigationNotice();
   const tasks = useTasks();
   const developers = useDevelopers();
   const updateTask = useUpdateTask();
-
-  // Show the message once, then clear it from history so a reload does not repeat it.
-  const [notice] = useState(() => readNotice(location.state));
-  useEffect(() => {
-    if (readNotice(location.state)) navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate]);
 
   const loadError = tasks.error ?? developers.error;
   const pendingTaskId = updateTask.isPending ? updateTask.variables.id : null;

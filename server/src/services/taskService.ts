@@ -1,18 +1,17 @@
 import { getPool, withTransaction } from "../db/pool.js";
+import type { TaskStatus } from "../domain/task.js";
 import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
+import { mapWithConcurrency } from "../lib/concurrency.js";
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
 import * as skills from "../repositories/skillRepository.js";
 import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
-import { CLASSIFIER_CONCURRENCY, mapWithConcurrency, tagSkills } from "./skillTagging.js";
+import { CLASSIFIER_CONCURRENCY, tagSkills } from "./skillTagging.js";
 import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
 export type { Task };
-
-export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 /** A task to create, with any subtasks to create under it (to any depth). */
 export interface CreateTaskInput {
@@ -134,9 +133,14 @@ export interface UpdateTaskInput {
  * - the Done rule: a task can only become Done if every one of its descendants
  *   is already Done.
  * Setting a task to To-do or In progress also reopens its Done ancestors.
+ * A status change first locks the task's tree, so concurrent status changes
+ * in one tree cannot each pass the Done check against the other's old state.
  */
 export async function updateTask(taskId: number, changes: UpdateTaskInput): Promise<Task> {
   await withTransaction(async (client) => {
+    // Assignee-only changes cannot break the Done invariant, so they skip the lock.
+    if (changes.status !== undefined) await tasks.lockTaskTree(client, taskId);
+
     const task = await tasks.findTaskById(client, taskId);
     if (!task) throw new NotFoundError(`Task ${taskId} not found`);
 

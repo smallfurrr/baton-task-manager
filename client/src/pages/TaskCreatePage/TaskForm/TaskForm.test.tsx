@@ -354,7 +354,9 @@ describe("TaskForm: subtasks", () => {
     expect(screen.getByRole("button", { name: "Add subtask to Task 1" })).toBeEnabled();
   });
 
-  it(`stops adding subtasks once the form holds ${MAX_NODES} tasks`, async () => {
+  // Clicks "Add subtask" about 100 times and re-renders a growing tree each time: about 2.5 s on a
+  // laptop but over the 5 s default on a slow CI runner, so it gets a longer limit of its own.
+  it(`stops adding subtasks once the form holds ${MAX_NODES} tasks`, { timeout: 30_000 }, async () => {
     const user = userEvent.setup({ delay: null });
     renderForm();
 
