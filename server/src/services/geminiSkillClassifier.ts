@@ -95,5 +95,5 @@ export function classifierFromEnv(env: NodeJS.ProcessEnv): SkillClassifier {
     console.warn("GEMINI_API_KEY is not set: tasks created without skills will stay untagged");
     return noopSkillClassifier;
   }
-  return new GeminiSkillClassifier({ apiKey, model: env.GEMINI_MODEL?.trim() || "gemini-3.5-flash" });
+  return new GeminiSkillClassifier({ apiKey, model: env.GEMINI_MODEL?.trim() || "gemini-3.5-flash-lite" });
 }

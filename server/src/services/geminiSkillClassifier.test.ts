@@ -120,7 +120,7 @@ describe("classifierFromEnv", () => {
   });
 
   it("uses Gemini when a key is set", () => {
-    expect(classifierFromEnv({ GEMINI_API_KEY: "abc", GEMINI_MODEL: "gemini-3.5-flash" })).toBeInstanceOf(
+    expect(classifierFromEnv({ GEMINI_API_KEY: "abc", GEMINI_MODEL: "gemini-3.5-flash-lite" })).toBeInstanceOf(
       GeminiSkillClassifier,
     );
   });
