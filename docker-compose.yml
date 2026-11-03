@@ -24,6 +24,9 @@ services:
       PORT: 3000
       # Overrides the localhost URL from .env: inside Docker the database host is the service name.
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Optional: without a key the server still starts and tasks are simply not auto-tagged.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     depends_on:
       db:
         condition: service_healthy
