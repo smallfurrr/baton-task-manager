@@ -1,5 +1,101 @@
-.marker {
-  margin-right: 0.4rem;
+/* The top-level task heads its card: white like the card itself so it stands out from the page, bold title. */
+/* `tr.row` outranks the card's `.group td` rule from TaskTable.module.css whatever the load order. */
+tr.row td {
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+  background: var(--surface);
+}
+
+tr.row td:first-child {
+  color: var(--accent-dark);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+/* Subtasks sit on a faint tint, a little smaller and lighter, hanging off a vertical line under their parent. */
+tr.subtask td {
+  background: var(--tint-soft);
+}
+
+.subtask td:first-child {
+  background-image: linear-gradient(var(--accent-soft), var(--accent-soft));
+  background-repeat: no-repeat;
+  background-position: calc(1rem + (var(--depth, 1) - 1) * 1.75rem + 0.5rem) 0;
+  background-size: 1px 100%;
+  font-size: 0.925rem;
+  font-weight: 500;
+}
+
+tr.row:hover td,
+tr.subtask:hover td {
+  background-color: var(--tint);
+}
+
+.toggle,
+.toggleSpace {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0 0.4rem 0 -0.4rem;
+  vertical-align: middle;
+}
+
+.toggle {
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--tint);
+}
+
+/* A chevron that points right when collapsed and down when expanded. */
+.chevron {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
+  transform: translateY(-1px) rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.count {
+  margin-left: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  /* --chip-bg / --chip-text are set per skill (see lib/skillColor). */
+  background: var(--chip-bg, var(--tint));
+  color: var(--chip-text, var(--accent));
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.none {
   color: var(--text-muted);
 }
 

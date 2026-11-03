@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Banner } from "../../components/Banner/Banner";
+import { buttonClassName } from "../../components/Button/Button";
 import { TaskTable } from "./TaskTable/TaskTable";
 import { useDevelopers } from "../../hooks/developers";
 import { useTasks, useUpdateTask } from "../../hooks/tasks";
@@ -42,16 +43,16 @@ export function TaskListPage() {
     <section>
       <div className={styles.heading}>
         <h2>Tasks</h2>
-        <Link to="/tasks/new" className={styles.createLink}>
+        <Link to="/tasks/new" className={buttonClassName("primary")}>
           Create task
         </Link>
       </div>
       {notice && <Banner variant="notice" message={notice} />}
       {updateTask.error && <Banner variant="error" message={updateTask.error.message} />}
       {loadError && <Banner variant="error" message={`Could not load tasks: ${loadError.message}`} />}
-      {!loaded && !loadError && <p>Loading tasks…</p>}
+      {!loaded && !loadError && <p className={styles.status}>Loading tasks…</p>}
       {loaded && taskList.length === 0 && (
-        <p>
+        <p className={styles.empty}>
           No tasks yet. <Link to="/tasks/new">Create the first one</Link>.
         </p>
       )}

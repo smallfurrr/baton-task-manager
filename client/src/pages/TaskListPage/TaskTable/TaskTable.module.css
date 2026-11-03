@@ -1,26 +1,87 @@
+/* The wrapper scrolls sideways on narrow screens instead of squashing the controls. */
+.scroll {
+  overflow-x: auto;
+}
+
+/*
+ * Separate borders (not collapsed) so each <tbody> can be drawn as a rounded card:
+ * the edge cells of its first and last rows carry the outline.
+ */
 .table {
   width: 100%;
-  border-collapse: collapse;
+  min-width: 42rem;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .table th,
 .table td {
-  padding: 0.75rem;
+  padding: 0.7rem 1rem;
   /* A row sets --depth on its title cell to indent subtasks; other cells have none, so no indent. */
-  padding-left: calc(0.75rem + var(--depth, 0) * 1.5rem);
-  border-bottom: 1px solid var(--border);
+  padding-left: calc(1rem + var(--depth, 0) * 1.75rem);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table th {
+  padding-bottom: 0.6rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* Title takes the remaining width; the other columns size to their controls. */
 .table th:first-child,
 .table td:first-child {
-  width: 50%;
+  width: 45%;
+}
+
+/* A card: one top-level task with its subtasks. */
+.group td {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.group tr:first-child td {
+  border-top: 1px solid var(--border);
+}
+
+.group tr:last-child td {
+  border-bottom: 1px solid var(--border);
+}
+
+.group td:first-child {
+  border-left: 1px solid var(--border);
+}
+
+.group td:last-child {
+  border-right: 1px solid var(--border);
+}
+
+.group tr:first-child td:first-child {
+  border-top-left-radius: 12px;
+}
+
+.group tr:first-child td:last-child {
+  border-top-right-radius: 12px;
+}
+
+.group tr:last-child td:first-child {
+  border-bottom-left-radius: 12px;
+}
+
+.group tr:last-child td:last-child {
+  border-bottom-right-radius: 12px;
+}
+
+/* Rows inside a card are divided by a fainter line than the card's own outline. */
+.group tr:not(:last-child) td {
+  border-bottom-color: var(--tint);
+}
+
+.gap td {
+  height: 1.25rem;
+  padding: 0;
 }

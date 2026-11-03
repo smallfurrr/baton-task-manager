@@ -1,0 +1,23 @@
+/* Status reads as a coloured pill; the shared Select supplies the rest. */
+.todo,
+.in_progress,
+.done {
+  --select-border: transparent;
+  --select-radius: 999px;
+  --select-weight: 600;
+}
+
+.todo {
+  --select-bg: var(--status-todo-bg);
+  --select-text: var(--status-todo-text);
+}
+
+.in_progress {
+  --select-bg: var(--status-in-progress-bg);
+  --select-text: var(--status-in-progress-text);
+}
+
+.done {
+  --select-bg: var(--status-done-bg);
+  --select-text: var(--status-done-text);
+}

@@ -1,5 +1,6 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import type { Developer, Task, UpdateTaskInput } from "../../../api/types";
+import { countSubtasks } from "../../../lib/countSubtasks";
 import { TaskRow } from "./TaskRow";
 import styles from "./TaskTable.module.css";
 
@@ -35,26 +36,74 @@ function TaskRows({ tasks, depth, developers, pendingTaskId, onUpdate }: RowsPro
   ));
 }
 
-export function TaskTable({ tasks, developers, pendingTaskId, onUpdate }: TaskTableProps) {
+/** Empty space between two cards. Hidden from assistive tech: it is not a task. */
+function GroupGap() {
   return (
-    <table className={styles.table}>
-      <thead>
-        <tr>
-          <th scope="col">Task Title</th>
-          <th scope="col">Skills</th>
-          <th scope="col">Status</th>
-          <th scope="col">Assignee</th>
-        </tr>
-      </thead>
-      <tbody>
-        <TaskRows
-          tasks={tasks}
-          depth={0}
-          developers={developers}
-          pendingTaskId={pendingTaskId}
-          onUpdate={onUpdate}
-        />
-      </tbody>
-    </table>
+    <tbody className={styles.gap} aria-hidden="true">
+      <tr>
+        <td colSpan={4} />
+      </tr>
+    </tbody>
+  );
+}
+
+export function TaskTable({ tasks, developers, pendingTaskId, onUpdate }: TaskTableProps) {
+  // Ids of top-level tasks whose subtasks are hidden. Everything starts expanded; nothing is remembered across reloads.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
+
+  function toggle(taskId: number) {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (!next.delete(taskId)) next.add(taskId);
+      return next;
+    });
+  }
+
+  return (
+    <div className={styles.scroll}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th scope="col">Task Title</th>
+            <th scope="col">Skills</th>
+            <th scope="col">Status</th>
+            <th scope="col">Assignee</th>
+          </tr>
+        </thead>
+        {/* One <tbody> per top-level task, drawn as a card with its subtasks inside it. */}
+        {tasks.map((task, index) => (
+          <Fragment key={task.id}>
+            {index > 0 && <GroupGap />}
+            <tbody className={styles.group}>
+              <TaskRow
+                task={task}
+                depth={0}
+                developers={developers}
+                pending={task.id === pendingTaskId}
+                collapse={
+                  task.subtasks.length > 0
+                    ? {
+                        subtaskCount: countSubtasks(task),
+                        expanded: !collapsed.has(task.id),
+                        onToggle: () => toggle(task.id),
+                      }
+                    : undefined
+                }
+                onUpdate={onUpdate}
+              />
+              {!collapsed.has(task.id) && (
+                <TaskRows
+                  tasks={task.subtasks}
+                  depth={1}
+                  developers={developers}
+                  pendingTaskId={pendingTaskId}
+                  onUpdate={onUpdate}
+                />
+              )}
+            </tbody>
+          </Fragment>
+        ))}
+      </table>
+    </div>
   );
 }

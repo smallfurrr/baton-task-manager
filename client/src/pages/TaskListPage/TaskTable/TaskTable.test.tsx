@@ -45,7 +45,7 @@ describe("TaskTable", () => {
     renderTable([makeTask({ skills: [frontend, backend], status: "in_progress", assignee: { id: 3, name: "Carol" } })]);
 
     const row = screen.getByRole("row", { name: /Responsive homepage/ });
-    expect(within(row).getByText("Frontend, Backend")).toBeInTheDocument();
+    expect(within(row).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Frontend", "Backend"]);
     expect(screen.getByRole("combobox", { name: "Status for Responsive homepage" })).toHaveDisplayValue("In progress");
     expect(screen.getByRole("combobox", { name: "Assignee for Responsive homepage" })).toHaveDisplayValue("Carol");
   });
@@ -161,8 +161,11 @@ describe("TaskTable: subtasks", () => {
     return screen
       .getAllByRole("row")
       .slice(1) // header
-      // The visible "↳" marker is decoration (aria-hidden), so leave it out of the title text.
-      .map((row) => (within(row).getAllByRole("cell")[0]!.textContent ?? "").replace("↳", ""));
+      .map((row) =>
+        (within(row).getAllByRole("cell")[0]!.textContent ?? "")
+          // The "N subtasks" label next to a parent's title is not part of the title.
+          .replace(/\d+ subtasks?$/, ""),
+      );
   }
 
   it("shows each subtask directly under its parent, to any depth", () => {
@@ -177,7 +180,7 @@ describe("TaskTable: subtasks", () => {
     ]);
   });
 
-  it("indents by depth and marks subtasks, but not top-level tasks", () => {
+  it("indents by depth and labels subtasks for screen readers, but not top-level tasks", () => {
     renderTable(nested);
 
     expect(titleCellDepth("Profile page")).toBe("0");
@@ -185,7 +188,7 @@ describe("TaskTable: subtasks", () => {
     expect(titleCellDepth("Resize images")).toBe("2");
     expect(titleCellDepth("Avatar picker")).toBe("1");
     expect(titleCellDepth("Another task")).toBe("0");
-    expect(screen.getAllByText("↳")).toHaveLength(3);
+    expect(screen.getAllByText("Subtask:")).toHaveLength(3);
   });
 
   it("gives every subtask its own status and assignee controls", () => {
@@ -244,5 +247,67 @@ describe("TaskTable: subtasks", () => {
 
     expect(rowTitles()).toHaveLength(5);
     expect(titleCellDepth("level 5")).toBe("4");
+  });
+
+  describe("collapsing", () => {
+    const parent = makeTask({
+      id: 1,
+      title: "Profile page",
+      subtasks: [
+        makeTask({ id: 2, parentId: 1, title: "Upload endpoint", subtasks: [makeTask({ id: 3, parentId: 2, title: "Resize images" })] }),
+        makeTask({ id: 4, parentId: 1, title: "Avatar picker" }),
+      ],
+    });
+
+    it("shows all subtasks at first, with a count that includes deeper levels", () => {
+      renderTable([parent]);
+
+      expect(screen.getByText("3 subtasks")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Collapse Profile page" })).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByRole("row", { name: /Resize images/ })).toBeInTheDocument();
+    });
+
+    it("hides every subtask when collapsed and brings them back when expanded", async () => {
+      renderTable([parent, makeTask({ id: 5, title: "Another task" })]);
+
+      await userEvent.click(screen.getByRole("button", { name: "Collapse Profile page" }));
+
+      expect(screen.queryByRole("row", { name: /Upload endpoint/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("row", { name: /Resize images/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("row", { name: /Another task/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Expand Profile page" })).toHaveAttribute("aria-expanded", "false");
+
+      await userEvent.click(screen.getByRole("button", { name: "Expand Profile page" }));
+
+      expect(screen.getByRole("row", { name: /Resize images/ })).toBeInTheDocument();
+    });
+
+    it("collapses one task without affecting another", async () => {
+      const other = makeTask({ id: 6, title: "Other parent", subtasks: [makeTask({ id: 7, parentId: 6, title: "Other child" })] });
+      renderTable([parent, other]);
+
+      await userEvent.click(screen.getByRole("button", { name: "Collapse Profile page" }));
+
+      expect(screen.getByRole("row", { name: /Other child/ })).toBeInTheDocument();
+    });
+
+    it("has no toggle on a task without subtasks, and a singular label for one subtask", () => {
+      renderTable([
+        makeTask({ id: 8, title: "Solo" }),
+        makeTask({ id: 9, title: "Pair", subtasks: [makeTask({ id: 11, parentId: 9, title: "Only child" })] }),
+      ]);
+
+      expect(screen.queryByRole("button", { name: /Collapse Solo|Expand Solo/ })).not.toBeInTheDocument();
+      expect(screen.getByText("1 subtask")).toBeInTheDocument();
+    });
+
+    it("keeps a collapsed task's own controls working", async () => {
+      const onUpdate = renderTable([parent]);
+
+      await userEvent.click(screen.getByRole("button", { name: "Collapse Profile page" }));
+      await userEvent.selectOptions(screen.getByRole("combobox", { name: "Status for Profile page" }), "done");
+
+      expect(onUpdate).toHaveBeenCalledWith(1, { status: "done" });
+    });
   });
 });
