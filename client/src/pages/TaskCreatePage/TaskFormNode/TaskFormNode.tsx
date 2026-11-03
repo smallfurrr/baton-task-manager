@@ -91,6 +91,9 @@ export function TaskFormNode(props: TaskFormNodeProps) {
 
         <fieldset className={styles.skills}>
           <legend>Required skills (optional)</legend>
+          {node.skillIds.length === 0 && (
+            <p className={styles.hint}>Leave empty and skills will be suggested automatically.</p>
+          )}
           {skills.map((skill) => (
             <label key={skill.id} className={styles.checkbox}>
               <input

@@ -29,6 +29,19 @@ describe("TaskForm", () => {
     expect(screen.getByRole("checkbox", { name: "Backend" })).not.toBeChecked();
   });
 
+  it("says skills are suggested automatically until one is ticked", async () => {
+    renderForm();
+    const hint = "Leave empty and skills will be suggested automatically.";
+
+    expect(screen.getByText(hint)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Backend" }));
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Backend" }));
+    expect(screen.getByText(hint)).toBeInTheDocument();
+  });
+
   it("submits a title with no skills and no assignee", async () => {
     const onSubmit = renderForm();
 
