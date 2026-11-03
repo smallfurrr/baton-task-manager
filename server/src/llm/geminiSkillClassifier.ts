@@ -1,4 +1,4 @@
-import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
+import { noopSkillClassifier, type SkillClassifier } from "../services/skillClassifier.js";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const DEFAULT_TIMEOUT_MS = 8000;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { classifierFromEnv, GeminiSkillClassifier, parseSkillNames } from "./geminiSkillClassifier.js";
-import { noopSkillClassifier } from "./skillClassifier.js";
+import { noopSkillClassifier } from "../services/skillClassifier.js";
 
 afterEach(() => vi.restoreAllMocks());
 
