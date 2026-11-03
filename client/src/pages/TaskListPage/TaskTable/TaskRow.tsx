@@ -51,8 +51,21 @@ export function TaskRow({ task, depth, developers, pending, collapse, onUpdate }
         {task.skills.length > 0 ? (
           <ul className={styles.chips}>
             {task.skills.map((skill) => (
-              <li key={skill.id} className={styles.chip} style={skillChipStyle(skill.name)}>
+              <li
+                key={skill.id}
+                className={styles.chip}
+                style={skillChipStyle(skill.name)}
+                // A CSS tooltip (see .chip in TaskRow.module.css): the native `title` is slow and unreliable.
+                data-tooltip={skill.addedByAi ? "Added by AI" : undefined}
+              >
+                {skill.addedByAi && (
+                  <span className={styles.sparkle} aria-hidden="true">
+                    ✨
+                  </span>
+                )}
                 {skill.name}
+                {/* The tooltip is visual only, so say it in text too. */}
+                {skill.addedByAi && <span className={styles.visuallyHidden}> (added by AI)</span>}
               </li>
             ))}
           </ul>

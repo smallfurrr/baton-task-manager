@@ -5,6 +5,11 @@ export interface Skill {
   name: string;
 }
 
+/** A skill on a task, and whether the classifier (not the user) added it. */
+export interface TaskSkill extends Skill {
+  addedByAi: boolean;
+}
+
 export interface Developer {
   id: number;
   name: string;
@@ -20,7 +25,7 @@ export interface Task {
   parentId: number | null;
   title: string;
   status: TaskStatus;
-  skills: Skill[];
+  skills: TaskSkill[];
   assignee: { id: number; name: string } | null;
   /** Subtasks in creation order, each with its own subtasks, to any depth. */
   subtasks: Task[];

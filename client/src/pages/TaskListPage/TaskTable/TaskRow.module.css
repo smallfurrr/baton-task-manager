@@ -96,6 +96,42 @@ tr.subtask:hover td {
   font-weight: 600;
 }
 
+/* A chip with a `data-tooltip` shows it above itself on hover. */
+.chip {
+  position: relative;
+}
+
+.chip[data-tooltip] {
+  cursor: help;
+}
+
+.chip[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 10;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background: var(--text);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 0.12s;
+}
+
+.chip[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+.sparkle {
+  margin-right: 0.25rem;
+}
+
 .none {
   color: var(--text-muted);
 }

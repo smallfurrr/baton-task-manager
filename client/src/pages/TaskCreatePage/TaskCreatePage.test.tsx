@@ -5,6 +5,7 @@ import { App } from "../../App";
 import type { Skill, Task } from "../../api/types";
 import { jsonResponse, mockApi } from "../../test/fetch";
 import { renderWithProviders } from "../../test/render";
+import { taskSkills } from "../../test/skills";
 
 const skills: Skill[] = [
   { id: 1, name: "Frontend" },
@@ -16,7 +17,7 @@ const createdTask: Task = {
   parentId: null,
   title: "Profile page",
   status: "todo",
-  skills,
+  skills: taskSkills(skills),
   assignee: null,
   subtasks: [],
   createdAt: "2026-11-02T00:00:00.000Z",
@@ -54,14 +55,14 @@ describe("task creation flow", () => {
     const nested: Task = {
       ...createdTask,
       title: "Profile page",
-      skills: [skills[0]!],
+      skills: taskSkills([skills[0]!]),
       subtasks: [
         {
           ...createdTask,
           id: 6,
           parentId: 5,
           title: "Upload endpoint",
-          skills: [skills[1]!],
+          skills: taskSkills([skills[1]!]),
           subtasks: [{ ...createdTask, id: 7, parentId: 6, title: "Resize images", skills: [] }],
         },
       ],

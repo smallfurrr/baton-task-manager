@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Developer, Skill, Task } from "../../../api/types";
 import { TaskTable } from "./TaskTable";
+import { taskSkills } from "../../../test/skills";
 
 const frontend: Skill = { id: 1, name: "Frontend" };
 const backend: Skill = { id: 2, name: "Backend" };
@@ -20,7 +21,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     parentId: null,
     title: "Responsive homepage",
     status: "todo",
-    skills: [frontend],
+    skills: taskSkills([frontend]),
     assignee: null,
     subtasks: [],
     createdAt: "2026-11-02T00:00:00.000Z",
@@ -42,12 +43,27 @@ function optionNames(select: HTMLElement): string[] {
 
 describe("TaskTable", () => {
   it("shows the title, skills, status label and assignee", () => {
-    renderTable([makeTask({ skills: [frontend, backend], status: "in_progress", assignee: { id: 3, name: "Carol" } })]);
+    renderTable([makeTask({ skills: taskSkills([frontend, backend]), status: "in_progress", assignee: { id: 3, name: "Carol" } })]);
 
     const row = screen.getByRole("row", { name: /Responsive homepage/ });
     expect(within(row).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Frontend", "Backend"]);
     expect(screen.getByRole("combobox", { name: "Status for Responsive homepage" })).toHaveDisplayValue("In progress");
     expect(screen.getByRole("combobox", { name: "Assignee for Responsive homepage" })).toHaveDisplayValue("Carol");
+  });
+
+  it("marks skills added by AI with a sparkle and a tooltip (and screen-reader text), and leaves user-chosen ones plain", () => {
+    renderTable([makeTask({ skills: [...taskSkills([frontend]), ...taskSkills([backend], true)] })]);
+
+    const items = screen.getAllByRole("listitem");
+    const ai = items.find((item) => item.textContent?.includes("Backend"))!;
+    const user = items.find((item) => item.textContent?.includes("Frontend"))!;
+
+    expect(ai).toHaveAttribute("data-tooltip", "Added by AI");
+    expect(ai).toHaveTextContent("✨");
+    expect(ai).toHaveTextContent("Backend (added by AI)");
+    expect(user).not.toHaveAttribute("data-tooltip");
+    expect(user).not.toHaveTextContent("✨");
+    expect(user).toHaveTextContent(/^Frontend$/);
   });
 
   it("shows None for a task with no skills", () => {
@@ -63,7 +79,7 @@ describe("TaskTable", () => {
   });
 
   it("offers only developers who hold every required skill", () => {
-    renderTable([makeTask({ skills: [frontend, backend] })]);
+    renderTable([makeTask({ skills: taskSkills([frontend, backend]) })]);
 
     expect(optionNames(screen.getByRole("combobox", { name: /Assignee/ }))).toEqual(["Unassigned", "Carol"]);
   });
@@ -82,8 +98,8 @@ describe("TaskTable", () => {
 
   it("filters each task's assignee options independently", () => {
     renderTable([
-      makeTask({ id: 1, title: "Frontend work", skills: [frontend] }),
-      makeTask({ id: 2, title: "Backend work", skills: [backend] }),
+      makeTask({ id: 1, title: "Frontend work", skills: taskSkills([frontend]) }),
+      makeTask({ id: 2, title: "Backend work", skills: taskSkills([backend]) }),
     ]);
 
     expect(optionNames(screen.getByRole("combobox", { name: "Assignee for Frontend work" }))).toEqual([
@@ -137,16 +153,16 @@ describe("TaskTable: subtasks", () => {
     makeTask({
       id: 1,
       title: "Profile page",
-      skills: [frontend, backend],
+      skills: taskSkills([frontend, backend]),
       subtasks: [
         makeTask({
           id: 2,
           parentId: 1,
           title: "Upload endpoint",
-          skills: [backend],
-          subtasks: [makeTask({ id: 3, parentId: 2, title: "Resize images", skills: [backend] })],
+          skills: taskSkills([backend]),
+          subtasks: [makeTask({ id: 3, parentId: 2, title: "Resize images", skills: taskSkills([backend]) })],
         }),
-        makeTask({ id: 4, parentId: 1, title: "Avatar picker", skills: [frontend] }),
+        makeTask({ id: 4, parentId: 1, title: "Avatar picker", skills: taskSkills([frontend]) }),
       ],
     }),
     makeTask({ id: 5, title: "Another task" }),

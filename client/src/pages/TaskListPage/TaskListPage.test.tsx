@@ -5,6 +5,7 @@ import type { Developer, Skill, Task } from "../../api/types";
 import { jsonResponse, mockApi } from "../../test/fetch";
 import { renderWithProviders } from "../../test/render";
 import { TaskListPage } from "./TaskListPage";
+import { taskSkills } from "../../test/skills";
 
 const frontend: Skill = { id: 1, name: "Frontend" };
 const backend: Skill = { id: 2, name: "Backend" };
@@ -20,7 +21,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     parentId: null,
     title: "Profile page",
     status: "todo",
-    skills: [frontend, backend],
+    skills: taskSkills([frontend, backend]),
     assignee: null,
     subtasks: [],
     createdAt: "2026-11-02T00:00:00.000Z",
@@ -139,7 +140,7 @@ describe("TaskListPage: subtasks", () => {
     makeTask({
       id: 10,
       title: "Profile page",
-      subtasks: [makeTask({ id: 11, parentId: 10, title: "Upload endpoint", skills: [backend] })],
+      subtasks: [makeTask({ id: 11, parentId: 10, title: "Upload endpoint", skills: taskSkills([backend]) })],
       ...overrides,
     });
 
