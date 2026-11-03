@@ -1,9 +1,10 @@
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import { resetDatabase } from "../test/db.js";
+import { fakeClassifier } from "../test/fakeClassifier.js";
 
 const app = createApp();
 
@@ -675,5 +676,35 @@ describe("PATCH /api/tasks/:id: reopening Done ancestors", () => {
     expect(after.status).toBe("in_progress");
     expect(after.subtasks[0].status).toBe("in_progress");
     expect(after.subtasks[0].subtasks[0].status).toBe("todo");
+  });
+});
+
+describe("POST /api/tasks: skill tagging", () => {
+  it("tags a task created without skills using the configured classifier", async () => {
+    const classifier = fakeClassifier({ "Fix the query": ["Backend"] });
+
+    const res = await request(createApp({ classifier })).post("/api/tasks").send({ title: "Fix the query" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.skills).toEqual([{ id: await idOf("skills", "Backend"), name: "Backend" }]);
+  });
+
+  it("still creates the task when the classifier fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const classifier = fakeClassifier({ "Fix the query": new Error("unavailable") });
+
+    const res = await request(createApp({ classifier })).post("/api/tasks").send({ title: "Fix the query" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.skills).toEqual([]);
+  });
+
+  it("does not call the classifier when skills are given", async () => {
+    const classifier = fakeClassifier();
+    const frontend = await idOf("skills", "Frontend");
+
+    await request(createApp({ classifier })).post("/api/tasks").send({ title: "Chosen", skillIds: [frontend] });
+
+    expect(classifier.calls).toEqual([]);
   });
 });

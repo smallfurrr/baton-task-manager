@@ -3,6 +3,9 @@ import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMis
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
+import * as skills from "../repositories/skillRepository.js";
+import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
+import { CLASSIFIER_CONCURRENCY, mapWithConcurrency, tagSkills } from "./skillTagging.js";
 import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
@@ -20,6 +23,38 @@ export interface CreateTaskInput {
 
 function collectSkillIds(input: CreateTaskInput): number[] {
   return [...input.skillIds, ...(input.subtasks ?? []).flatMap(collectSkillIds)];
+}
+
+function collectUntagged(input: CreateTaskInput): CreateTaskInput[] {
+  const own = input.skillIds.length === 0 ? [input] : [];
+  return [...own, ...(input.subtasks ?? []).flatMap(collectUntagged)];
+}
+
+/**
+ * Copy of the tree where every task created without skills gets the ones the
+ * classifier suggests. Tasks with user-chosen skills never reach the classifier.
+ * Runs before the transaction so a slow LLM call holds no connection or locks.
+ */
+async function withSuggestedSkills(input: CreateTaskInput, classifier: SkillClassifier): Promise<CreateTaskInput> {
+  const untagged = collectUntagged(input);
+  if (untagged.length === 0) return input;
+
+  const known = await skills.listSkills(getPool());
+  if (known.length === 0) return input;
+
+  const suggestions = await mapWithConcurrency(untagged, CLASSIFIER_CONCURRENCY, (node) =>
+    tagSkills(node.title, known, classifier),
+  );
+  const byNode = new Map(untagged.map((node, i) => [node, suggestions[i] ?? []]));
+
+  function apply(node: CreateTaskInput): CreateTaskInput {
+    return {
+      title: node.title,
+      skillIds: byNode.get(node) ?? node.skillIds,
+      subtasks: (node.subtasks ?? []).map(apply),
+    };
+  }
+  return apply(input);
 }
 
 /** Top-level tasks, newest first, each with its subtasks nested underneath. */
@@ -40,10 +75,15 @@ export async function getTask(id: number): Promise<Task> {
 /**
  * Create a task and all its subtasks in one transaction, so a failure anywhere
  * saves nothing. Parents are inserted before their children and siblings in
- * the order given, so ids follow creation order.
+ * the order given, so ids follow creation order. Tasks given no skills are
+ * tagged by the classifier; if it fails they are saved without skills.
  */
-export async function createTask(input: CreateTaskInput): Promise<Task> {
-  checkTreeLimits(input);
+export async function createTask(
+  rawInput: CreateTaskInput,
+  classifier: SkillClassifier = noopSkillClassifier,
+): Promise<Task> {
+  checkTreeLimits(rawInput);
+  const input = await withSuggestedSkills(rawInput, classifier);
 
   const id = await withTransaction(async (client) => {
     const requested = [...new Set(collectSkillIds(input))];

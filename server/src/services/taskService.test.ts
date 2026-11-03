@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import {
@@ -9,6 +9,7 @@ import {
   ValidationError,
 } from "../errors.js";
 import { resetDatabase } from "../test/db.js";
+import { fakeClassifier } from "../test/fakeClassifier.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
 
 async function idOf(table: "skills" | "developers", name: string): Promise<number> {
@@ -26,6 +27,7 @@ async function taskRequiring(...skillNames: string[]): Promise<number> {
 }
 
 beforeEach(async () => {
+  vi.restoreAllMocks();
   await resetDatabase(getPool());
   await seed(getPool());
 });
@@ -484,5 +486,80 @@ describe("createTask: size limits", () => {
     await expect(createTask(tooMany)).rejects.toBeInstanceOf(ValidationError);
 
     expect(await taskCount()).toBe(0);
+  });
+});
+
+describe("createTask: skill tagging", () => {
+  const skillNames = (task: { skills: { name: string }[] }) => task.skills.map((skill) => skill.name).sort();
+
+  it("tags a task created without skills with the classifier's suggestion", async () => {
+    const classifier = fakeClassifier({ "Build the login API": ["Backend"] });
+
+    const task = await createTask({ title: "Build the login API", skillIds: [] }, classifier);
+
+    expect(skillNames(task)).toEqual(["Backend"]);
+    expect(classifier.calls[0]?.skillNames.sort()).toEqual(["Backend", "Frontend"]);
+  });
+
+  it("skips the classifier when the user chose skills", async () => {
+    const classifier = fakeClassifier({ Chosen: ["Backend"] });
+    const frontend = await idOf("skills", "Frontend");
+
+    const task = await createTask({ title: "Chosen", skillIds: [frontend] }, classifier);
+
+    expect(skillNames(task)).toEqual(["Frontend"]);
+    expect(classifier.calls).toEqual([]);
+  });
+
+  it("classifies each untagged subtask on its own and skips tagged ones", async () => {
+    const classifier = fakeClassifier({
+      Parent: ["Frontend", "Backend"],
+      "Style the page": ["Frontend"],
+      "Add the endpoint": ["Backend"],
+    });
+    const backend = await idOf("skills", "Backend");
+
+    const task = await createTask(
+      {
+        title: "Parent",
+        skillIds: [],
+        subtasks: [
+          { title: "Style the page", skillIds: [] },
+          { title: "Tagged by user", skillIds: [backend], subtasks: [{ title: "Add the endpoint", skillIds: [] }] },
+        ],
+      },
+      classifier,
+    );
+
+    expect(skillNames(task)).toEqual(["Backend", "Frontend"]);
+    expect(skillNames(task.subtasks[0]!)).toEqual(["Frontend"]);
+    expect(skillNames(task.subtasks[1]!)).toEqual(["Backend"]);
+    expect(skillNames(task.subtasks[1]!.subtasks[0]!)).toEqual(["Backend"]);
+    expect(classifier.calls.map((call) => call.title).sort()).toEqual(["Add the endpoint", "Parent", "Style the page"]);
+  });
+
+  it("saves the task without skills when the classifier fails, and still tags the others", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const classifier = fakeClassifier({ Parent: new Error("quota exceeded"), Child: ["Frontend"] });
+
+    const task = await createTask(
+      { title: "Parent", skillIds: [], subtasks: [{ title: "Child", skillIds: [] }] },
+      classifier,
+    );
+
+    expect(task.skills).toEqual([]);
+    expect(skillNames(task.subtasks[0]!)).toEqual(["Frontend"]);
+  });
+
+  it("ignores suggestions that are not known skills", async () => {
+    const classifier = fakeClassifier({ Odd: ["DevOps", "backend"] });
+
+    const task = await createTask({ title: "Odd", skillIds: [] }, classifier);
+
+    expect(skillNames(task)).toEqual(["Backend"]);
+  });
+
+  it("leaves tasks untagged by default (no classifier configured)", async () => {
+    expect((await createTask({ title: "Plain", skillIds: [] })).skills).toEqual([]);
   });
 });

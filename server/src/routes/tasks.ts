@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { SkillClassifier } from "../services/skillClassifier.js";
 import { checkTreeLimits } from "../services/taskLimits.js";
 import * as taskService from "../services/taskService.js";
 import { TASK_STATUSES, type CreateTaskInput } from "../services/taskService.js";
 import { idNumberSchema, parseBody, parseId } from "../validation.js";
-
-export const tasksRouter = Router();
 
 /** A task to create with its subtasks, to any depth (the depth is capped by `checkTreeLimits`). */
 const createTaskSchema: z.ZodType<CreateTaskInput> = z.lazy(() =>
@@ -32,22 +31,28 @@ const updateTaskSchema = z
     message: "provide at least one of: status, assigneeId",
   });
 
-tasksRouter.get("/", async (_req, res) => {
-  res.json(await taskService.listTasks());
-});
+export function createTasksRouter(classifier: SkillClassifier): Router {
+  const tasksRouter = Router();
 
-tasksRouter.get("/:id", async (req, res) => {
-  res.json(await taskService.getTask(parseId(req.params.id, "task id")));
-});
+  tasksRouter.get("/", async (_req, res) => {
+    res.json(await taskService.listTasks());
+  });
 
-tasksRouter.post("/", async (req, res) => {
-  // Also enforced inside createTask; checking the raw body first keeps schema validation off oversized trees.
-  checkTreeLimits(req.body);
-  const task = await taskService.createTask(parseBody(createTaskSchema, req.body));
-  res.status(201).location(`/api/tasks/${task.id}`).json(task);
-});
+  tasksRouter.get("/:id", async (req, res) => {
+    res.json(await taskService.getTask(parseId(req.params.id, "task id")));
+  });
 
-tasksRouter.patch("/:id", async (req, res) => {
-  const id = parseId(req.params.id, "task id");
-  res.json(await taskService.updateTask(id, parseBody(updateTaskSchema, req.body)));
-});
+  tasksRouter.post("/", async (req, res) => {
+    // Also enforced inside createTask; checking the raw body first keeps schema validation off oversized trees.
+    checkTreeLimits(req.body);
+    const task = await taskService.createTask(parseBody(createTaskSchema, req.body), classifier);
+    res.status(201).location(`/api/tasks/${task.id}`).json(task);
+  });
+
+  tasksRouter.patch("/:id", async (req, res) => {
+    const id = parseId(req.params.id, "task id");
+    res.json(await taskService.updateTask(id, parseBody(updateTaskSchema, req.body)));
+  });
+
+  return tasksRouter;
+}
