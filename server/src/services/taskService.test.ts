@@ -450,6 +450,77 @@ describe("updateTask: reopening Done ancestors", () => {
   });
 });
 
+describe("updateTask: concurrent status changes", () => {
+  const sleep = (ms: number) => new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), ms));
+
+  async function forceDone(...ids: number[]): Promise<void> {
+    await getPool().query("UPDATE tasks SET status = 'done' WHERE id = ANY($1::int[])", [ids]);
+  }
+
+  /** Hold the lock on a tree's root, as a concurrent status change would, until `release` is called. */
+  async function holdRootLock(rootId: number): Promise<{ release: () => Promise<void> }> {
+    const client = await getPool().connect();
+    await client.query("BEGIN");
+    await client.query("SELECT id FROM tasks WHERE id = $1 FOR NO KEY UPDATE", [rootId]);
+    return {
+      release: async () => {
+        await client.query("COMMIT");
+        client.release();
+      },
+    };
+  }
+
+  it("makes a status change wait while another change holds the tree's lock", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "leaf" }] }] });
+    const lock = await holdRootLock(ids.root!);
+
+    const change = setStatus(ids.leaf!, "in_progress"); // a deep task is locked through its root
+    try {
+      expect(await Promise.race([change, sleep(150)])).toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+    expect((await change).status).toBe("in_progress");
+  });
+
+  it("does not make an assignee-only change wait", async () => {
+    const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+    const lock = await holdRootLock(ids.root!);
+
+    try {
+      const task = await Promise.race([assignTask(ids.child!, await idOf("developers", "Alice")), sleep(150)]);
+      expect(task).not.toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+  });
+
+  it("does not make changes in another tree wait", async () => {
+    const mine = await createTree({ title: "mine", subtasks: [{ title: "mine child" }] });
+    const other = await createTree({ title: "other" });
+    const lock = await holdRootLock(mine.mine!);
+
+    try {
+      expect(await Promise.race([setStatus(other.other!, "in_progress"), sleep(150)])).not.toBe("timeout");
+    } finally {
+      await lock.release();
+    }
+  });
+
+  it("never leaves a Done parent above an unfinished child when Done and reopen race", async () => {
+    for (let round = 0; round < 20; round++) {
+      const ids = await createTree({ title: "root", subtasks: [{ title: "child" }] });
+      // The child is Done and the parent is not: race "parent -> Done" against "child -> To-do".
+      await forceDone(ids.child!);
+
+      await Promise.allSettled([setStatus(ids.root!, "done"), setStatus(ids.child!, "todo")]);
+
+      const [root, child] = await Promise.all([statusOf(ids.root!), statusOf(ids.child!)]);
+      expect(root === "done" && child !== "done", `round ${round}: root ${root}, child ${child}`).toBe(false);
+    }
+  });
+});
+
 describe("createTask: size limits", () => {
   type Node = { title: string; skillIds: number[]; subtasks: Node[] };
 

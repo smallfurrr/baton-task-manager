@@ -72,6 +72,26 @@ export async function findOpenDescendants(db: Queryable, taskId: number): Promis
   return rows;
 }
 
+/**
+ * Lock the root row of the tree the task belongs to, until the transaction ends.
+ * Status changes take this first, so two of them in one tree run one at a time and
+ * the second reads what the first committed. `NO KEY UPDATE` does not conflict with
+ * the foreign-key checks on the root's children.
+ */
+export async function lockTaskTree(db: Queryable, taskId: number): Promise<void> {
+  await db.query(
+    `WITH RECURSIVE chain AS (
+       SELECT id, parent_id FROM tasks WHERE id = $1
+       UNION ALL
+       SELECT t.id, t.parent_id FROM tasks t JOIN chain c ON t.id = c.parent_id
+     )
+     SELECT id FROM tasks
+     WHERE id = (SELECT id FROM chain WHERE parent_id IS NULL)
+     FOR NO KEY UPDATE`,
+    [taskId],
+  );
+}
+
 export async function insertTask(db: Queryable, title: string, parentId: number | null): Promise<number> {
   const { rows } = await db.query<{ id: number }>(
     "INSERT INTO tasks (title, parent_id) VALUES ($1, $2) RETURNING id",
