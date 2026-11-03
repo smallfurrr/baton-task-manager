@@ -9,7 +9,7 @@ assignment, nested subtasks, and automatic skill tagging via an LLM.
 - Database: PostgreSQL, schema changes via migrations only
 - Containerised with Docker; everything runs via `docker compose up`
 
-## Commands (update once scaffolded)
+## Commands
 - Run everything: `docker compose up --build`
 - Database only: `docker compose up -d db`
 - Server tests: `cd server && npm test`
