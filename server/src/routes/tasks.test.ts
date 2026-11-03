@@ -140,7 +140,7 @@ describe("GET /api/tasks", () => {
     expect(res.status).toBe(200);
     expect(res.body.map((t: { title: string }) => t.title)).toEqual(["Second", "First"]);
     expect(res.body[0].assignee).toEqual({ id: alice, name: "Alice" });
-    expect(res.body[0].skills).toEqual([{ id: frontend, name: "Frontend" }]);
+    expect(res.body[0].skills).toEqual([{ id: frontend, name: "Frontend", addedByAi: false }]);
     expect(res.body[1].assignee).toBeNull();
   });
 });
@@ -686,7 +686,17 @@ describe("POST /api/tasks: skill tagging", () => {
     const res = await request(createApp({ classifier })).post("/api/tasks").send({ title: "Fix the query" });
 
     expect(res.status).toBe(201);
-    expect(res.body.skills).toEqual([{ id: await idOf("skills", "Backend"), name: "Backend" }]);
+    expect(res.body.skills).toEqual([{ id: await idOf("skills", "Backend"), name: "Backend", addedByAi: true }]);
+  });
+
+  it("marks user-chosen skills as not added by AI, in the same response shape", async () => {
+    const frontend = await idOf("skills", "Frontend");
+
+    const res = await request(createApp({ classifier: fakeClassifier() }))
+      .post("/api/tasks")
+      .send({ title: "Chosen", skillIds: [frontend] });
+
+    expect(res.body.skills).toEqual([{ id: frontend, name: "Frontend", addedByAi: false }]);
   });
 
   it("still creates the task when the classifier fails", async () => {

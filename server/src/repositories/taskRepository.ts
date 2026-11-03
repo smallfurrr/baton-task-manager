@@ -1,13 +1,16 @@
 import type { Queryable } from "../db/pool.js";
 import type { SkillRow } from "./skillRepository.js";
 
+/** A skill on a task, and whether the classifier (not the user) added it. */
+export type TaskSkill = SkillRow & { addedByAi: boolean };
+
 /** One task as stored: subtasks are separate rows pointing at their parent. */
 export interface TaskRow {
   id: number;
   parentId: number | null;
   title: string;
   status: string;
-  skills: SkillRow[];
+  skills: TaskSkill[];
   assignee: { id: number; name: string } | null;
   createdAt: Date;
   updatedAt: Date;
@@ -19,7 +22,7 @@ const SELECT_TASK = `
          CASE WHEN d.id IS NULL THEN NULL
               ELSE json_build_object('id', d.id, 'name', d.name) END AS assignee,
          COALESCE((
-           SELECT json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name)
+           SELECT json_agg(json_build_object('id', s.id, 'name', s.name, 'addedByAi', ts.added_by_ai) ORDER BY s.name)
            FROM task_skills ts JOIN skills s ON s.id = ts.skill_id
            WHERE ts.task_id = t.id
          ), '[]') AS skills
@@ -76,9 +79,17 @@ export async function insertTask(db: Queryable, title: string, parentId: number 
   return rows[0]!.id;
 }
 
-export async function insertTaskSkills(db: Queryable, taskId: number, skillIds: number[]): Promise<void> {
+export async function insertTaskSkills(
+  db: Queryable,
+  taskId: number,
+  skillIds: number[],
+  addedByAi: boolean,
+): Promise<void> {
   if (skillIds.length === 0) return;
-  await db.query("INSERT INTO task_skills (task_id, skill_id) SELECT $1, unnest($2::int[])", [taskId, skillIds]);
+  await db.query(
+    "INSERT INTO task_skills (task_id, skill_id, added_by_ai) SELECT $1, unnest($2::int[]), $3",
+    [taskId, skillIds, addedByAi],
+  );
 }
 
 /** Returns the subset of `ids` that exist as skills. */

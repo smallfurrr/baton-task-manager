@@ -562,4 +562,52 @@ describe("createTask: skill tagging", () => {
   it("leaves tasks untagged by default (no classifier configured)", async () => {
     expect((await createTask({ title: "Plain", skillIds: [] })).skills).toEqual([]);
   });
+
+  describe("which skills were added by AI", () => {
+    const flags = (task: { skills: { name: string; addedByAi: boolean }[] }) =>
+      Object.fromEntries(task.skills.map((skill) => [skill.name, skill.addedByAi]));
+
+    it("marks skills the classifier added, and only those", async () => {
+      const classifier = fakeClassifier({ "Build the API": ["Backend"], Mixed: ["Frontend"] });
+      const backend = await idOf("skills", "Backend");
+
+      const task = await createTask(
+        {
+          title: "Build the API",
+          skillIds: [],
+          subtasks: [
+            { title: "Chosen by user", skillIds: [backend] },
+            { title: "Mixed", skillIds: [] },
+          ],
+        },
+        classifier,
+      );
+
+      expect(flags(task)).toEqual({ Backend: true });
+      expect(flags(task.subtasks[0]!)).toEqual({ Backend: false });
+      expect(flags(task.subtasks[1]!)).toEqual({ Frontend: true });
+    });
+
+    it("marks every skill as user-chosen when no classifier is configured", async () => {
+      const frontend = await idOf("skills", "Frontend");
+
+      const task = await createTask({ title: "Plain", skillIds: [frontend] });
+
+      expect(flags(task)).toEqual({ Frontend: false });
+    });
+
+    it("keeps the flag when the task is read again", async () => {
+      const created = await createTask({ title: "Build the API", skillIds: [] }, fakeClassifier({ "Build the API": ["Backend"] }));
+
+      expect(flags(await getTask(created.id))).toEqual({ Backend: true });
+    });
+
+    it("saves no skills, and so no flags, when the classifier fails", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const task = await createTask({ title: "Oops", skillIds: [] }, fakeClassifier({ Oops: new Error("down") }));
+
+      expect(task.skills).toEqual([]);
+    });
+  });
 });

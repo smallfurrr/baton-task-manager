@@ -21,8 +21,16 @@ export interface CreateTaskInput {
   subtasks?: CreateTaskInput[];
 }
 
-function collectSkillIds(input: CreateTaskInput): number[] {
-  return [...input.skillIds, ...(input.subtasks ?? []).flatMap(collectSkillIds)];
+/** A task ready to save: its skills are final, and `addedByAi` says whether the classifier chose them. */
+interface PlannedTask {
+  title: string;
+  skillIds: number[];
+  addedByAi: boolean;
+  subtasks: PlannedTask[];
+}
+
+function collectSkillIds(task: PlannedTask): number[] {
+  return [...task.skillIds, ...task.subtasks.flatMap(collectSkillIds)];
 }
 
 function collectUntagged(input: CreateTaskInput): CreateTaskInput[] {
@@ -31,30 +39,34 @@ function collectUntagged(input: CreateTaskInput): CreateTaskInput[] {
 }
 
 /**
- * Copy of the tree where every task created without skills gets the ones the
- * classifier suggests. Tasks with user-chosen skills never reach the classifier.
- * Runs before the transaction so a slow LLM call holds no connection or locks.
+ * The tree to save, where every task created without skills gets the ones the
+ * classifier suggests (and is marked as such). Tasks with user-chosen skills
+ * never reach the classifier. Runs before the transaction so a slow LLM call
+ * holds no connection or locks.
  */
-async function withSuggestedSkills(input: CreateTaskInput, classifier: SkillClassifier): Promise<CreateTaskInput> {
+async function planTasks(input: CreateTaskInput, classifier: SkillClassifier): Promise<PlannedTask> {
   const untagged = collectUntagged(input);
-  if (untagged.length === 0) return input;
+  const known = untagged.length > 0 ? await skills.listSkills(getPool()) : [];
 
-  const known = await skills.listSkills(getPool());
-  if (known.length === 0) return input;
+  const suggestions = new Map<CreateTaskInput, number[]>();
+  if (known.length > 0) {
+    const results = await mapWithConcurrency(untagged, CLASSIFIER_CONCURRENCY, (node) =>
+      tagSkills(node.title, known, classifier),
+    );
+    untagged.forEach((node, i) => suggestions.set(node, results[i] ?? []));
+  }
 
-  const suggestions = await mapWithConcurrency(untagged, CLASSIFIER_CONCURRENCY, (node) =>
-    tagSkills(node.title, known, classifier),
-  );
-  const byNode = new Map(untagged.map((node, i) => [node, suggestions[i] ?? []]));
-
-  function apply(node: CreateTaskInput): CreateTaskInput {
+  function plan(node: CreateTaskInput): PlannedTask {
+    const suggested = suggestions.get(node);
     return {
       title: node.title,
-      skillIds: byNode.get(node) ?? node.skillIds,
-      subtasks: (node.subtasks ?? []).map(apply),
+      skillIds: suggested ?? node.skillIds,
+      // Only a task that went to the classifier can have AI-added skills, even if it came back empty.
+      addedByAi: suggested !== undefined,
+      subtasks: (node.subtasks ?? []).map(plan),
     };
   }
-  return apply(input);
+  return plan(input);
 }
 
 /** Top-level tasks, newest first, each with its subtasks nested underneath. */
@@ -83,7 +95,7 @@ export async function createTask(
   classifier: SkillClassifier = noopSkillClassifier,
 ): Promise<Task> {
   checkTreeLimits(rawInput);
-  const input = await withSuggestedSkills(rawInput, classifier);
+  const input = await planTasks(rawInput, classifier);
 
   const id = await withTransaction(async (client) => {
     const requested = [...new Set(collectSkillIds(input))];
@@ -93,10 +105,10 @@ export async function createTask(
       throw new InvalidReferenceError(`Unknown skill id(s): ${unknown.join(", ")}`, { skillIds: unknown });
     }
 
-    async function insertTree(node: CreateTaskInput, parentId: number | null): Promise<number> {
+    async function insertTree(node: PlannedTask, parentId: number | null): Promise<number> {
       const taskId = await tasks.insertTask(client, node.title, parentId);
-      await tasks.insertTaskSkills(client, taskId, [...new Set(node.skillIds)]);
-      for (const subtask of node.subtasks ?? []) {
+      await tasks.insertTaskSkills(client, taskId, [...new Set(node.skillIds)], node.addedByAi);
+      for (const subtask of node.subtasks) {
         await insertTree(subtask, taskId);
       }
       return taskId;
