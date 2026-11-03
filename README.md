@@ -13,7 +13,7 @@ A task manager where tasks need skills and can only go to developers who have al
 
 ## Quick start
 
-Requires Docker with Compose.
+Requires Docker with Compose, and ports 8080 and 5432 free.
 
 ```bash
 cp .env.example .env     # then add your GEMINI_API_KEY
@@ -43,6 +43,8 @@ Set these in `.env`.
 A variable already set in your shell overrides `.env`.
 
 ## Local development
+
+Needs Node 22+ and the `.env` from the quick start.
 
 ```bash
 docker compose up -d db
