@@ -64,9 +64,19 @@ export function depthOf(root: FormNode, key: string, depth = 1): number | undefi
   return undefined;
 }
 
+/**
+ * Why a task at `depth` cannot take another subtask in a form holding `totalNodes` tasks,
+ * or undefined if it can. The one place the nesting and size limits are applied.
+ */
+export function addSubtaskBlockedReason(depth: number, totalNodes: number): string | undefined {
+  if (depth >= MAX_DEPTH) return `Subtasks can only be nested ${MAX_DEPTH} levels deep`;
+  if (totalNodes >= MAX_NODES) return `A request can create at most ${MAX_NODES} tasks`;
+  return undefined;
+}
+
 export function canAddSubtask(root: FormNode, parentKey: string): boolean {
   const depth = depthOf(root, parentKey);
-  return depth !== undefined && depth < MAX_DEPTH && countNodes(root) < MAX_NODES;
+  return depth !== undefined && addSubtaskBlockedReason(depth, countNodes(root)) === undefined;
 }
 
 /** Add `child` as the last subtask of the node with `parentKey`; unchanged if a limit would be exceeded. */

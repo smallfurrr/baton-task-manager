@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { Skill } from "../../../api/types";
 import { Button } from "../../../components/Button/Button";
 import { skillChipStyle } from "../../../lib/skillColor";
-import { MAX_DEPTH, MAX_NODES, type FormNode, type FormNodePatch } from "../../../lib/taskFormTree";
+import { addSubtaskBlockedReason, MAX_DEPTH, type FormNode, type FormNodePatch } from "../../../lib/taskFormTree";
 import styles from "./TaskFormNode.module.css";
 
 interface TaskFormNodeProps {
@@ -33,12 +33,7 @@ export function TaskFormNode(props: TaskFormNodeProps) {
   const number = labels.get(node.key) ?? "";
   const label = depth === 1 ? `Task ${number}` : `Subtask ${number}`;
   const error = errors.get(node.key);
-  const atDepthLimit = depth >= MAX_DEPTH;
-  const atSizeLimit = totalNodes >= MAX_NODES;
-  const canAdd = !atDepthLimit && !atSizeLimit;
-  const limitReason = atDepthLimit
-    ? `Subtasks can only be nested ${MAX_DEPTH} levels deep`
-    : `A request can create at most ${MAX_NODES} tasks`;
+  const addBlockedReason = addSubtaskBlockedReason(depth, totalNodes);
 
   function toggleSkill(skillId: number, checked: boolean) {
     onChange(node.key, {
@@ -51,7 +46,7 @@ export function TaskFormNode(props: TaskFormNodeProps) {
       <div
         role="group"
         aria-labelledby={labelId}
-        className={`${styles.box} ${styles[`depth${Math.min(depth, 3)}`] ?? ""}`}
+        className={`${styles.box} ${styles[`depth${Math.min(depth, MAX_DEPTH)}`] ?? ""}`}
       >
         <span id={labelId} className={styles.label}>
           {label}
@@ -84,8 +79,8 @@ export function TaskFormNode(props: TaskFormNodeProps) {
             type="button"
             size="sm"
             aria-label={`Add subtask to ${label}`}
-            disabled={!canAdd}
-            title={canAdd ? undefined : limitReason}
+            disabled={addBlockedReason !== undefined}
+            title={addBlockedReason}
             onClick={() => onAddSubtask(node.key)}
           >
             Add subtask
