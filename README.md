@@ -161,6 +161,7 @@ Errors share one shape:
 | 409 | `SKILL_MISMATCH`, `INCOMPLETE_SUBTASKS` |
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `INVALID_REFERENCE` |
+| 500 | `INTERNAL_ERROR` |
 
 ## Libraries
 
@@ -183,6 +184,7 @@ No component library: the UI is a table, a form and selects, so native elements 
 - A task with no skills can be assigned to anyone.
 - Skills and developers are read-only, and a task's skills can't change after creation.
 - Developer names are unique. A real system would use a stable key such as an email.
+- Skill names are assumed to differ ignoring case ("Frontend" and "frontend" would clash). The database only enforces exact uniqueness, which is enough because skills are seeded and read-only. The classifier matches names ignoring case.
 - Tasks are created unassigned; assign them from the list.
 - Reopening a subtask of a Done task is allowed and moves its Done ancestors to In progress. Other ancestors are left alone.
 - Nesting is capped at 3 levels (task, subtask, sub-subtask). It is a product limit, not a schema limit.
@@ -193,7 +195,7 @@ No component library: the UI is a table, a form and selects, so native elements 
 
 ```
 client/    React app and its nginx config
-server/    Express API and SQL migrations
+server/    Express API (routes, services, repositories, domain, llm, lib) and SQL migrations
 docs/      Screenshots
 docker-compose.yml
 ```

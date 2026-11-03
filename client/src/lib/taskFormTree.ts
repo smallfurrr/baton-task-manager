@@ -1,7 +1,7 @@
 import type { CreateTaskInput, Skill } from "../api/types";
 
 /** Limits that the server also enforces; mirrored here so the form can stop before the server has to. */
-export const MAX_TITLE_LENGTH = 500;
+const MAX_TITLE_LENGTH = 500;
 /** Levels counted from the task itself: task, subtask, sub-subtask. */
 export const MAX_DEPTH = 3;
 export const MAX_NODES = 100;

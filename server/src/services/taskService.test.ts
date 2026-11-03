@@ -31,7 +31,7 @@ beforeEach(async () => {
 
 afterAll(closePool);
 
-describe("assignTask: skill rule", () => {
+describe("updateTask: skill rule", () => {
   it("lets Carol (Frontend + Backend) take a Frontend + Backend task", async () => {
     const taskId = await taskRequiring("Frontend", "Backend");
     const carol = await idOf("developers", "Carol");
@@ -103,7 +103,7 @@ describe("assignTask: skill rule", () => {
   });
 });
 
-describe("assignTask: other cases", () => {
+describe("updateTask: assignee cases", () => {
   it("clears the assignee with null", async () => {
     const taskId = await taskRequiring("Backend");
     await assignTask(taskId, await idOf("developers", "Bob"));
