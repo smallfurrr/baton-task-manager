@@ -173,3 +173,42 @@ describe("subtasks (parent_id)", () => {
     expect(rows[0]).toEqual({ n: 0 });
   });
 });
+
+describe("task_skills.added_by_ai", () => {
+  async function taskAndSkill(): Promise<{ taskId: number; skillId: number }> {
+    const taskId = await insertId("INSERT INTO tasks (title) VALUES ('t')");
+    const skillId = await insertId("INSERT INTO skills (name) VALUES ('Backend')");
+    return { taskId, skillId };
+  }
+
+  it("defaults to false, so a skill counts as user-chosen unless stated", async () => {
+    const { taskId, skillId } = await taskAndSkill();
+
+    const { rows } = await pool.query(
+      "INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2) RETURNING added_by_ai",
+      [taskId, skillId],
+    );
+
+    expect(rows[0]).toEqual({ added_by_ai: false });
+  });
+
+  it("stores true when the classifier added the skill", async () => {
+    const { taskId, skillId } = await taskAndSkill();
+
+    const { rows } = await pool.query(
+      "INSERT INTO task_skills (task_id, skill_id, added_by_ai) VALUES ($1, $2, true) RETURNING added_by_ai",
+      [taskId, skillId],
+    );
+
+    expect(rows[0]).toEqual({ added_by_ai: true });
+  });
+
+  it("does not accept null", async () => {
+    const { taskId, skillId } = await taskAndSkill();
+
+    await expectPgError(
+      pool.query("INSERT INTO task_skills (task_id, skill_id, added_by_ai) VALUES ($1, $2, NULL)", [taskId, skillId]),
+      "23502",
+    );
+  });
+});
