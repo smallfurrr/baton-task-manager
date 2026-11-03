@@ -1,5 +1,7 @@
 import { useId } from "react";
 import type { Skill } from "../../../api/types";
+import { Button } from "../../../components/Button/Button";
+import { skillChipStyle } from "../../../lib/skillColor";
 import { MAX_DEPTH, MAX_NODES, type FormNode, type FormNodePatch } from "../../../lib/taskFormTree";
 import styles from "./TaskFormNode.module.css";
 
@@ -46,34 +48,22 @@ export function TaskFormNode(props: TaskFormNodeProps) {
 
   return (
     <div>
-      <div role="group" aria-labelledby={labelId} className={styles.box}>
-        <div className={styles.header}>
-          <span id={labelId} className={styles.label}>
-            {label}
-          </span>
-          <div className={styles.actions}>
-            {depth > 1 && (
-              <button type="button" aria-label={`Remove ${label}`} onClick={() => onRemove(node.key)}>
-                Remove
-              </button>
-            )}
-            <button
-              type="button"
-              aria-label={`Add subtask to ${label}`}
-              disabled={!canAdd}
-              title={canAdd ? undefined : limitReason}
-              onClick={() => onAddSubtask(node.key)}
-            >
-              Add subtask
-            </button>
-          </div>
-        </div>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        className={`${styles.box} ${styles[`depth${Math.min(depth, 3)}`] ?? ""}`}
+      >
+        <span id={labelId} className={styles.label}>
+          {label}
+        </span>
 
         <div className={styles.field}>
-          <label htmlFor={titleId}>Title</label>
+          <label htmlFor={titleId} className={styles.visuallyHidden}>
+            Title
+          </label>
           <textarea
             id={titleId}
-            rows={depth === 1 ? 3 : 2}
+            rows={1}
             value={node.title}
             onChange={(event) => onChange(node.key, { title: event.target.value })}
             aria-invalid={error !== undefined}
@@ -89,13 +79,38 @@ export function TaskFormNode(props: TaskFormNodeProps) {
           )}
         </div>
 
-        <fieldset className={styles.skills}>
-          <legend>Required skills (optional)</legend>
-          {node.skillIds.length === 0 && (
-            <p className={styles.hint}>Leave empty and skills will be suggested automatically.</p>
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            size="sm"
+            aria-label={`Add subtask to ${label}`}
+            disabled={!canAdd}
+            title={canAdd ? undefined : limitReason}
+            onClick={() => onAddSubtask(node.key)}
+          >
+            Add subtask
+          </Button>
+          {depth > 1 && (
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              aria-label={`Remove ${label}`}
+              onClick={() => onRemove(node.key)}
+            >
+              Remove
+            </Button>
           )}
+        </div>
+
+        <fieldset className={styles.skills}>
+          {/* The group keeps its full name for assistive tech; sighted users get the short "Skills" label. */}
+          <legend className={styles.visuallyHidden}>Required skills (optional)</legend>
+          <span className={styles.skillsLabel} aria-hidden="true">
+            Skills
+          </span>
           {skills.map((skill) => (
-            <label key={skill.id} className={styles.checkbox}>
+            <label key={skill.id} className={styles.checkbox} style={skillChipStyle(skill.name)}>
               <input
                 type="checkbox"
                 checked={node.skillIds.includes(skill.id)}
@@ -104,6 +119,11 @@ export function TaskFormNode(props: TaskFormNodeProps) {
               {skill.name}
             </label>
           ))}
+          {node.skillIds.length === 0 && (
+            <p className={styles.hint}>
+              <span aria-hidden="true">✨ </span>Leave empty and skills will be suggested automatically.
+            </p>
+          )}
         </fieldset>
       </div>
 

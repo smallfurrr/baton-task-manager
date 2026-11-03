@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { CreateTaskInput, Skill } from "../../../api/types";
 import { Banner } from "../../../components/Banner/Banner";
+import { Button, buttonClassName } from "../../../components/Button/Button";
 import {
   addSubtask,
   countNodes,
@@ -70,12 +71,12 @@ export function TaskForm({ skills, submitting, submitError, onSubmit }: TaskForm
       />
 
       <div className={styles.actions}>
-        <Link to="/" className={styles.cancel}>
+        <Link to="/" className={buttonClassName("secondary")}>
           Cancel
         </Link>
-        <button type="submit" disabled={submitting}>
+        <Button type="submit" variant="primary" disabled={submitting}>
           {submitting ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </form>
   );
