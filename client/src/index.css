@@ -1,14 +1,38 @@
 /* Global base only: design tokens and resets. Component styles live in *.module.css files. */
 :root {
-  --text: #1f2933;
-  --text-muted: #52606d;
-  --border: #d9dee3;
+  /* Neutral palette. `--accent` is a deep aubergine (#250238) that reads almost black: it marks
+     primary actions, the active tab and focus. Everything else is grey on white. */
+  --accent: #250238;
+  --accent-dark: #250238;
+  --accent-mid: #6b7280;
+  --accent-soft: #c4cad2;
+
+  /* Surfaces and text */
+  --bg: #f7f8fa;
   --surface: #ffffff;
+  --tint: #f0f2f5;
+  --tint-soft: #f7f8fa;
+  --border: #e5e7eb;
+  --text: #1f2430;
+  --text-muted: #6b7280;
+
+  /* Status colours: kept distinguishable */
+  --status-todo-bg: #eceff1;
+  --status-todo-text: #37474f;
+  --status-in-progress-bg: #e1effe;
+  --status-in-progress-text: #1a56a8;
+  --status-done-bg: #e3f4e6;
+  --status-done-text: #1b5e20;
+
   --danger-bg: #fdecea;
   --danger-border: #e57373;
   --danger-text: #b71c1c;
   --success-bg: #e8f5e9;
   --success-border: #81c784;
+
+  --radius: 8px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%);
+
   font-family: system-ui, sans-serif;
   color: var(--text);
 }
@@ -21,4 +45,30 @@
 
 body {
   margin: 0;
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+h2 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

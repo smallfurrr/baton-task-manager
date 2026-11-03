@@ -1,35 +1,55 @@
 .header {
-  display: flex;
-  align-items: baseline;
-  gap: 2rem;
-  padding: 1rem 2rem;
   border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.headerInner {
+  display: flex;
+  align-items: stretch;
+  gap: 2.5rem;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
 }
 
 .title {
+  display: flex;
+  align-items: center;
   margin: 0;
-  font-size: 1.25rem;
+  color: var(--accent);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .nav {
   display: flex;
-  gap: 1rem;
+  gap: 1.75rem;
 }
 
+/* Tabs: the active one gets a dark underline that sits on the header's bottom border. */
 .navLink {
+  display: flex;
+  align-items: center;
+  padding: 1.1rem 0 calc(1.1rem - 2px);
+  border-bottom: 2px solid transparent;
   color: var(--text-muted);
+  font-weight: 500;
   text-decoration: none;
 }
 
 .navLink:hover {
-  color: var(--text);
+  color: var(--accent-dark);
 }
 
 .navLinkActive {
-  color: var(--text);
+  border-bottom-color: var(--accent);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .main {
-  padding: 1.5rem 2rem;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
 }

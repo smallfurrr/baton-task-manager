@@ -11,15 +11,17 @@ export function App() {
   return (
     <>
       <header className={styles.header}>
-        <h1 className={styles.title}>Baton</h1>
-        <nav className={styles.nav} aria-label="Main">
-          <NavLink to="/" end className={navLinkClass}>
-            Tasks
-          </NavLink>
-          <NavLink to="/tasks/new" className={navLinkClass}>
-            Create task
-          </NavLink>
-        </nav>
+        <div className={styles.headerInner}>
+          <h1 className={styles.title}>Baton</h1>
+          <nav className={styles.nav} aria-label="Main">
+            <NavLink to="/" end className={navLinkClass}>
+              Tasks
+            </NavLink>
+            <NavLink to="/tasks/new" className={navLinkClass}>
+              Create task
+            </NavLink>
+          </nav>
+        </div>
       </header>
       <main className={styles.main}>
         <Routes>
