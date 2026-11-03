@@ -1,12 +1,24 @@
 .select {
-  width: 100%;
-  min-width: 9rem;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--surface);
-  color: inherit;
+  min-width: 7.5rem;
+  padding: 0.25rem 1.75rem 0.25rem 0.7rem;
+  border: 1px solid var(--select-border, var(--border));
+  border-radius: var(--select-radius, 6px);
+  /* A caller can restyle the select by setting --select-bg / --select-text / --select-border / --select-radius (see StatusSelect). */
+  background-color: var(--select-bg, var(--surface));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 0.65rem center;
+  background-repeat: no-repeat;
+  color: var(--select-text, inherit);
   font: inherit;
+  font-size: 0.875rem;
+  font-weight: var(--select-weight, 400);
+  line-height: 1.5;
+  appearance: none;
+  cursor: pointer;
+}
+
+.select:hover:not(:disabled) {
+  border-color: var(--accent-soft);
 }
 
 .select:disabled {
