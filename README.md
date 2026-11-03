@@ -38,7 +38,7 @@ Set these in `.env`.
 | `PORT` | API port (3000) |
 | `DATABASE_URL` | Database URL when running the server outside Docker |
 | `GEMINI_API_KEY` | Key for skill tagging. Without it the app still works; tasks just stay untagged |
-| `GEMINI_MODEL` | Default `gemini-3.5-flash-lite` |
+| `GEMINI_MODEL` | Optional. Overrides the server's default Gemini model (set in `server/src/llm/geminiSkillClassifier.ts`) |
 
 A variable already set in your shell overrides `.env`.
 
