@@ -1,15 +1,19 @@
 import type { Queryable } from "../db/pool.js";
+import type { OpenSubtask, TaskStatus } from "../domain/task.js";
 import type { SkillRow } from "./skillRepository.js";
 
 /** A skill on a task, and whether the classifier (not the user) added it. */
 export type TaskSkill = SkillRow & { addedByAi: boolean };
 
-/** One task as stored: subtasks are separate rows pointing at their parent. */
+/**
+ * One task as stored: subtasks are separate rows pointing at their parent.
+ * `status` is typed as `TaskStatus` because the database CHECK guarantees it.
+ */
 export interface TaskRow {
   id: number;
   parentId: number | null;
   title: string;
-  status: string;
+  status: TaskStatus;
   skills: TaskSkill[];
   assignee: { id: number; name: string } | null;
   createdAt: Date;
@@ -55,11 +59,8 @@ export async function findSubtreeRows(db: Queryable, rootId: number): Promise<Ta
 }
 
 /** Every descendant (children, grandchildren, ...) of the task that is not Done, in creation order. */
-export async function findOpenDescendants(
-  db: Queryable,
-  taskId: number,
-): Promise<Array<{ id: number; title: string; status: string }>> {
-  const { rows } = await db.query<{ id: number; title: string; status: string }>(
+export async function findOpenDescendants(db: Queryable, taskId: number): Promise<OpenSubtask[]> {
+  const { rows } = await db.query<OpenSubtask>(
     `WITH RECURSIVE descendants AS (
        SELECT id, title, status FROM tasks WHERE parent_id = $1
        UNION ALL
@@ -100,7 +101,7 @@ export async function findExistingSkillIds(db: Queryable, ids: number[]): Promis
 }
 
 export interface TaskChanges {
-  status?: string;
+  status?: TaskStatus;
   /** `null` clears the assignee; `undefined` leaves it unchanged. */
   assigneeId?: number | null;
 }

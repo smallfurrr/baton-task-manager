@@ -1,3 +1,5 @@
+import type { OpenSubtask } from "./domain/task.js";
+
 /** An error with an HTTP status and a stable machine-readable code. */
 export class AppError extends Error {
   constructor(
@@ -44,12 +46,6 @@ export class SkillMismatchError extends AppError {
     );
     this.name = "SkillMismatchError";
   }
-}
-
-export interface OpenSubtask {
-  id: number;
-  title: string;
-  status: string;
 }
 
 const TITLES_IN_MESSAGE = 3;

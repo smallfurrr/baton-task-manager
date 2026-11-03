@@ -1,4 +1,5 @@
 import type { Queryable } from "../db/pool.js";
+import type { TaskStatus } from "../domain/task.js";
 import type { SkillRow } from "./skillRepository.js";
 
 export interface DeveloperRow {
@@ -10,7 +11,7 @@ export interface DeveloperRow {
 export interface DeveloperTaskRow {
   id: number;
   title: string;
-  status: string;
+  status: TaskStatus;
 }
 
 const DEVELOPER_WITH_SKILLS = `

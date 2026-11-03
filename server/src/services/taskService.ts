@@ -1,4 +1,5 @@
 import { getPool, withTransaction } from "../db/pool.js";
+import type { TaskStatus } from "../domain/task.js";
 import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
@@ -10,9 +11,6 @@ import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
 export type { Task };
-
-export const TASK_STATUSES = ["todo", "in_progress", "done"] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 /** A task to create, with any subtasks to create under it (to any depth). */
 export interface CreateTaskInput {

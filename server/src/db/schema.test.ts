@@ -1,5 +1,6 @@
 import type pg from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { TASK_STATUSES } from "../domain/task.js";
 import { closePool, getPool } from "./pool.js";
 import { assertTestDatabase, resetDatabase } from "../test/db.js";
 
@@ -66,6 +67,11 @@ describe("schema constraints", () => {
     const { rows } = await pool.query("INSERT INTO tasks (title) VALUES ('t') RETURNING status, assignee_id");
 
     expect(rows[0]).toEqual({ status: "todo", assignee_id: null });
+  });
+
+  // Keeps the CHECK constraint and TASK_STATUSES in step: a status added to one must be added to the other.
+  it.each(TASK_STATUSES)("accepts the status %s", async (status) => {
+    await expect(pool.query("INSERT INTO tasks (title, status) VALUES ('t', $1)", [status])).resolves.toBeDefined();
   });
 
   it("rejects an unknown status", async () => {

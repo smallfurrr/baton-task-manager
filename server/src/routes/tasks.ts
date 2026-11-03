@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import { TASK_STATUSES } from "../domain/task.js";
 import type { SkillClassifier } from "../services/skillClassifier.js";
 import { checkTreeLimits } from "../services/taskLimits.js";
 import * as taskService from "../services/taskService.js";
-import { TASK_STATUSES, type CreateTaskInput } from "../services/taskService.js";
+import type { CreateTaskInput } from "../services/taskService.js";
 import { idNumberSchema, parseBody, parseId } from "../validation.js";
 
 /** A task to create with its subtasks, to any depth (the depth is capped by `checkTreeLimits`). */
