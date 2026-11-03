@@ -5,6 +5,7 @@ import {
   canAddSubtask,
   countNodes,
   depthOf,
+  hasTaskWithoutSkills,
   MAX_DEPTH,
   MAX_NODES,
   newNode,
@@ -239,5 +240,23 @@ describe("toCreateInput", () => {
 
   it("ignores skill ids the form does not list", () => {
     expect(toCreateInput(node("a", "t", [], [1, 99]), skills).skillIds).toEqual([1]);
+  });
+});
+
+describe("hasTaskWithoutSkills", () => {
+  it("is true for a task with no skills", () => {
+    expect(hasTaskWithoutSkills(node("a"))).toBe(true);
+  });
+
+  it("is false when every task has a skill", () => {
+    const tree = node("a", "", [node("b", "", [node("c", "", [], [1])], [2])], [1]);
+
+    expect(hasTaskWithoutSkills(tree)).toBe(false);
+  });
+
+  it("is true when only a deep subtask has none", () => {
+    const tree = node("a", "", [node("b", "", [node("c")], [2])], [1]);
+
+    expect(hasTaskWithoutSkills(tree)).toBe(true);
   });
 });

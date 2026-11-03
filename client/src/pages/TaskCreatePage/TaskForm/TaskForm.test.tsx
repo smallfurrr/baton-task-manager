@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Skill } from "../../../api/types";
 import { MAX_DEPTH, MAX_NODES } from "../../../lib/taskFormTree";
@@ -131,7 +132,51 @@ describe("TaskForm", () => {
   it("disables saving while a save is in progress", () => {
     renderForm({ submitting: true });
 
-    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+  });
+
+  describe("while a save is in progress", () => {
+    it("locks the fields and the Add subtask button", () => {
+      renderForm({ submitting: true });
+
+      expect(title()).toBeDisabled();
+      expect(screen.getByRole("checkbox", { name: "Backend" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Add subtask to Task 1" })).toBeDisabled();
+    });
+
+    it("says skills are being suggested when a task has none ticked", () => {
+      renderForm({ submitting: true });
+
+      expect(screen.getByRole("status")).toHaveTextContent("Creating task and suggesting skills…");
+    });
+
+    it("does not mention suggestions when every task has skills", async () => {
+      // Submitting through a real form, so the status appears the way it does in the app.
+      function Harness() {
+        const [submitting, setSubmitting] = useState(false);
+        return <TaskForm skills={skills} submitting={submitting} onSubmit={() => setSubmitting(true)} />;
+      }
+      renderWithProviders(<Harness />);
+
+      await userEvent.type(title(), "Chosen");
+      await userEvent.click(screen.getByRole("checkbox", { name: "Backend" }));
+      await userEvent.click(save());
+
+      expect(screen.getByRole("status")).toHaveTextContent(/^Creating task…$/);
+    });
+
+    it("blocks the Cancel link", async () => {
+      renderForm({ submitting: true });
+
+      expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("shows no progress message when idle", () => {
+      renderForm();
+
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute("aria-disabled", "false");
+    });
   });
 
   it("shows the message from a failed save", () => {

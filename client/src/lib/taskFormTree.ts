@@ -49,6 +49,11 @@ export function countNodes(root: FormNode): number {
   return 1 + root.subtasks.reduce((total, child) => total + countNodes(child), 0);
 }
 
+/** True if any task in the tree has no skills ticked, so the server will ask the classifier to suggest them. */
+export function hasTaskWithoutSkills(root: FormNode): boolean {
+  return root.skillIds.length === 0 || root.subtasks.some(hasTaskWithoutSkills);
+}
+
 /** How deep the node sits, with the root task at 1; undefined if the key is not in the tree. */
 export function depthOf(root: FormNode, key: string, depth = 1): number | undefined {
   if (root.key === key) return depth;
