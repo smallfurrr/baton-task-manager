@@ -57,3 +57,105 @@ In each package: `npm test`, `npm run lint`, `npm run typecheck`. Server tests n
 - **Server:** Vitest and supertest against a real PostgreSQL test database. A fake classifier stands in for the LLM, so no test calls Gemini.
 - **Client:** Vitest and React Testing Library.
 - Every business rule below has tests.
+
+## System design
+
+```mermaid
+flowchart LR
+  Browser -->|":8080"| Client["client: nginx + React"]
+  Client -->|"/api"| Server["server: Express"]
+  Server --> DB[("PostgreSQL")]
+  Server -.->|"skill tagging"| Gemini["Gemini API"]
+```
+
+**Server.** Routes (HTTP, zod validation) call services (business rules, transactions), which call repositories (plain SQL via `pg`). Rules live in services, not in routes or the UI. Typed errors become `{ "error": { "code", "message", "details" } }` with the right status.
+
+**Data.** SQL migrations, no ORM. A subtask is a normal task row with a `parent_id`, so it has the same properties as a task and the same rules. Recursive queries read subtrees.
+
+```mermaid
+erDiagram
+  DEVELOPERS ||--o{ DEVELOPER_SKILLS : has
+  SKILLS ||--o{ DEVELOPER_SKILLS : "held by"
+  SKILLS ||--o{ TASK_SKILLS : "required by"
+  TASKS ||--o{ TASK_SKILLS : requires
+  DEVELOPERS ||--o{ TASKS : "assigned to"
+  TASKS ||--o{ TASKS : "parent of"
+  TASKS {
+    int id PK
+    int parent_id FK "null for top-level"
+    text title
+    text status "todo, in_progress, done"
+    int assignee_id FK "nullable"
+  }
+```
+
+**Business rules**
+
+| Rule | Failure |
+| --- | --- |
+| A developer needs **all** of a task's skills to be assigned. A task with no skills can go to anyone. | 409 `SKILL_MISMATCH` |
+| A task can be Done only if **all** its descendants are Done. | 409 `INCOMPLETE_SUBTASKS` |
+| Setting a task to To-do or In progress reopens its Done ancestors to In progress. | |
+| At most 3 levels and 100 tasks per request. | 400 `VALIDATION_ERROR` |
+| A task tree is created in one transaction. An unknown skill id saves nothing. | 422 `INVALID_REFERENCE` |
+
+These live in `server/src/services`.
+
+**Skill tagging.** Before the transaction opens, `createTask` asks a `SkillClassifier` for the skills of each task without any.
+- One Gemini call per task, 5 at a time, 8-second timeout.
+- The prompt lists the skills from the database. The answer must be a JSON array of those names, and is checked again afterwards.
+- If a call fails, the error is logged and the task is saved without skills.
+- Tasks with chosen skills are never classified.
+
+**Client.** React and Vite, with React Router for the two pages and TanStack Query for data. API calls live in `api/` and `hooks/`, not in components. The server returns subtasks nested, so the list just renders the tree. The create form holds one immutable tree (`lib/taskFormTree.ts`) and sends it in a single request.
+
+## API
+
+Base path `/api`, JSON bodies.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /skills`, `GET /skills/:id` | Skills. One skill includes its developers |
+| `GET /developers`, `GET /developers/:id` | Developers with skills. One developer includes their tasks |
+| `GET /tasks` | Top-level tasks, newest first, with nested `subtasks` |
+| `GET /tasks/:id` | Any task with its subtree |
+| `POST /tasks` | Create a task and optional nested subtasks (201) |
+| `PATCH /tasks/:id` | Set `status` and/or `assigneeId` (`null` clears it) |
+
+```bash
+curl -X POST localhost:8080/api/tasks -H 'content-type: application/json' -d '{
+  "title": "Add audit logging",
+  "skillIds": [2],
+  "subtasks": [{ "title": "Write the log table migration" }]
+}'
+```
+
+```json
+{
+  "id": 9, "parentId": null, "title": "Add audit logging", "status": "todo",
+  "assignee": null, "skills": [{ "id": 2, "name": "Backend" }],
+  "createdAt": "…", "updatedAt": "…",
+  "subtasks": [
+    { "id": 10, "parentId": 9, "title": "Write the log table migration", "status": "todo",
+      "assignee": null, "skills": [{ "id": 2, "name": "Backend" }], "subtasks": [],
+      "createdAt": "…", "updatedAt": "…" }
+  ]
+}
+```
+
+Subtasks without `skillIds` are tagged automatically. To assign and update: `PATCH /api/tasks/9` with `{ "assigneeId": 3, "status": "in_progress" }`.
+
+Errors share one shape:
+
+```json
+{ "error": { "code": "SKILL_MISMATCH", "message": "Alice cannot be assigned: missing required skill(s) Backend",
+             "details": { "missingSkills": [{ "id": 2, "name": "Backend" }] } } }
+```
+
+| Status | Codes |
+| --- | --- |
+| 400 | `VALIDATION_ERROR`, `INVALID_JSON` |
+| 404 | `NOT_FOUND` |
+| 409 | `SKILL_MISMATCH`, `INCOMPLETE_SUBTASKS` |
+| 413 | `PAYLOAD_TOO_LARGE` |
+| 422 | `INVALID_REFERENCE` |
