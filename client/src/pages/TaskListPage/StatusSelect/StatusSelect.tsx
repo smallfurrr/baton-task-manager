@@ -1,6 +1,5 @@
 import { Select } from "../../../components/Select/Select";
-import { TASK_STATUSES, type TaskStatus } from "../../../api/types";
-import { STATUS_LABELS } from "../../../lib/statusLabels";
+import { STATUS_LABELS, TASK_STATUSES, type TaskStatus } from "../../../domain/taskStatus";
 import styles from "./StatusSelect.module.css";
 
 interface StatusSelectProps {
