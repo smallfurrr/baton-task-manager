@@ -70,7 +70,7 @@ export class GeminiSkillClassifier implements SkillClassifier {
           temperature: 0,
           responseMimeType: "application/json",
           responseSchema: { type: "ARRAY", items: { type: "STRING", enum: skillNames } },
-          thinkingConfig: { thinkingBudget: 0 },
+          // No `thinkingConfig`: its options differ by model and Lite models reject `thinkingBudget` with a 400.
         },
       }),
     });

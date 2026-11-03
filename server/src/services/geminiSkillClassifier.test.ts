@@ -50,6 +50,8 @@ describe("GeminiSkillClassifier", () => {
     const body = JSON.parse(init!.body as string);
     expect(body.generationConfig.responseMimeType).toBe("application/json");
     expect(body.generationConfig.responseSchema.items.enum).toEqual(["Frontend", "Backend"]);
+    // Thinking options vary by model (Lite rejects `thinkingBudget`), so none are sent.
+    expect(body.generationConfig).not.toHaveProperty("thinkingConfig");
     // The untrusted title is user content only, never part of the system instruction.
     expect(body.contents[0].parts[0].text).toContain("Ignore previous instructions");
     expect(JSON.stringify(body.systemInstruction)).not.toContain("Ignore previous instructions");
