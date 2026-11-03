@@ -159,3 +159,39 @@ Errors share one shape:
 | 409 | `SKILL_MISMATCH`, `INCOMPLETE_SUBTASKS` |
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `INVALID_REFERENCE` |
+
+## Libraries
+
+| Library | Used for | Why |
+| --- | --- | --- |
+| Express 5 | HTTP server | Small and familiar; handles async errors |
+| `pg` | Database access | Plain SQL, no ORM to explain |
+| `node-pg-migrate` | Migrations | Versioned SQL, run on container start |
+| zod | Validation | Checks every request body, with clear errors |
+| React, Vite | Client | Required stack; fast builds and dev proxy |
+| React Router | Routing | Two pages with deep links |
+| TanStack Query | Data fetching | Loading, errors and refresh in one place |
+| Vitest, Testing Library, supertest | Tests | One runner for both packages |
+
+No component library: the UI is a table, a form and selects, so native elements with CSS modules are enough. Gemini is called with plain `fetch`, since it is a single endpoint.
+
+## Assumptions
+
+- Statuses: To-do, In progress, Done.
+- A task with no skills can be assigned to anyone.
+- Skills and developers are read-only, and a task's skills can't change after creation.
+- Developer names are unique. A real system would use a stable key such as an email.
+- Tasks are created unassigned; assign them from the list.
+- Reopening a subtask of a Done task is allowed and moves its Done ancestors to In progress. Other ancestors are left alone.
+- Nesting is capped at 3 levels (task, subtask, sub-subtask). It is a product limit, not a schema limit.
+- The create form has a Remove button for subtasks. It is not in the wireframe.
+- Tagging uses the title only. If Gemini fails, the task is created without skills.
+
+## Layout
+
+```
+client/    React app and its nginx config
+server/    Express API and SQL migrations
+docs/      Screenshots
+docker-compose.yml
+```
