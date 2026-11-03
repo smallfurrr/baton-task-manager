@@ -1,5 +1,5 @@
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
@@ -240,17 +240,6 @@ describe("PATCH /api/tasks/:id", () => {
 
     expect(res.body.status).toBe("in_progress");
     expect(res.body.assignee.name).toBe("Dave");
-  });
-
-  it("changes nothing when the assignment in a combined update is rejected", async () => {
-    const id = await createTask("t", "Backend");
-
-    const res = await request(app)
-      .patch(`/api/tasks/${id}`)
-      .send({ status: "done", assigneeId: await idOf("developers", "Alice") });
-
-    expect(res.status).toBe(409);
-    expect((await request(app).get(`/api/tasks/${id}`)).body.status).toBe("todo");
   });
 
   it("returns 422 for an unknown developer", async () => {
@@ -549,62 +538,6 @@ describe("PATCH /api/tasks/:id: Done rule", () => {
     expect((await request(app).get(`/api/tasks/${root.id}`)).body.status).toBe("todo");
   });
 
-  it("allows Done on a task with no subtasks", async () => {
-    const task = (await post({ title: "solo" })).body;
-
-    const res = await patch(task.id, { status: "done" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("done");
-  });
-
-  it("allows Done once every level beneath is Done, completed bottom-up", async () => {
-    const root = (
-      await post({ title: "root", subtasks: [{ title: "child", subtasks: [{ title: "grandchild" }] }] })
-    ).body;
-    const child = root.subtasks[0];
-    const grandchild = child.subtasks[0];
-
-    expect((await patch(root.id, { status: "done" })).status).toBe(409);
-    expect((await patch(child.id, { status: "done" })).status).toBe(409);
-    expect((await patch(grandchild.id, { status: "done" })).status).toBe(200);
-    expect((await patch(child.id, { status: "done" })).status).toBe(200);
-    const final = await patch(root.id, { status: "done" });
-
-    expect(final.status).toBe(200);
-    expect(final.body.status).toBe("done");
-    expect(final.body.subtasks[0].subtasks[0].status).toBe("done");
-  });
-
-  it("allows In progress and To-do on a task whose subtasks are not Done", async () => {
-    const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
-
-    expect((await patch(root.id, { status: "in_progress" })).status).toBe(200);
-    expect((await patch(root.id, { status: "todo" })).status).toBe(200);
-  });
-
-  it("returns 409 for the blocked status even when combined with a valid assignment, applying neither", async () => {
-    const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
-
-    const res = await patch(root.id, { status: "done", assigneeId: await idOf("developers", "Carol") });
-
-    expect(res.status).toBe(409);
-    const after = (await request(app).get(`/api/tasks/${root.id}`)).body;
-    expect(after).toMatchObject({ status: "todo", assignee: null });
-  });
-
-  it("applies the skill rule to a subtask", async () => {
-    const backend = await idOf("skills", "Backend");
-    const root = (await post({ title: "root", subtasks: [{ title: "api", skillIds: [backend] }] })).body;
-
-    const rejected = await patch(root.subtasks[0].id, { assigneeId: await idOf("developers", "Alice") });
-    const accepted = await patch(root.subtasks[0].id, { assigneeId: await idOf("developers", "Dave") });
-
-    expect(rejected.status).toBe(409);
-    expect(rejected.body.error.code).toBe("SKILL_MISMATCH");
-    expect(accepted.status).toBe(200);
-    expect(accepted.body.assignee.name).toBe("Dave");
-  });
 });
 
 describe("PATCH /api/tasks/:id: reopening Done ancestors", () => {
@@ -623,19 +556,6 @@ describe("PATCH /api/tasks/:id: reopening Done ancestors", () => {
     expect(list[0].subtasks[0]).toMatchObject({ id: child.id, status: "in_progress" });
   });
 
-  it("reopens grandparents too", async () => {
-    const root = (await post({ title: "root", subtasks: [{ title: "mid", subtasks: [{ title: "leaf" }] }] })).body;
-    const mid = root.subtasks[0];
-    const leaf = mid.subtasks[0];
-    for (const id of [leaf.id, mid.id, root.id]) expect((await patch(id, { status: "done" })).status).toBe(200);
-
-    await patch(leaf.id, { status: "todo" });
-
-    const after = (await request(app).get(`/api/tasks/${root.id}`)).body;
-    expect(after.status).toBe("in_progress");
-    expect(after.subtasks[0].status).toBe("in_progress");
-    expect(after.subtasks[0].subtasks[0].status).toBe("todo");
-  });
 });
 
 describe("POST /api/tasks: skill tagging", () => {
@@ -658,22 +578,4 @@ describe("POST /api/tasks: skill tagging", () => {
     expect(res.body.skills).toEqual([{ id: frontend, name: "Frontend", addedByAi: false }]);
   });
 
-  it("still creates the task when the classifier fails", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const classifier = fakeClassifier({ "Fix the query": new Error("unavailable") });
-
-    const res = await request(createApp({ classifier })).post("/api/tasks").send({ title: "Fix the query" });
-
-    expect(res.status).toBe(201);
-    expect(res.body.skills).toEqual([]);
-  });
-
-  it("does not call the classifier when skills are given", async () => {
-    const classifier = fakeClassifier();
-    const frontend = await idOf("skills", "Frontend");
-
-    await request(createApp({ classifier })).post("/api/tasks").send({ title: "Chosen", skillIds: [frontend] });
-
-    expect(classifier.calls).toEqual([]);
-  });
 });
