@@ -1,5 +1,7 @@
 # Baton: skill-based task assignment
 
+[![CI](https://github.com/smallfurrr/baton-task-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/smallfurrr/baton-task-manager/actions/workflows/ci.yml)
+
 A task manager where tasks need skills and can only go to developers who have all of them. Tasks can have nested subtasks, and an LLM tags tasks that are created without skills.
 
 - Skill-restricted assignment, enforced on the server.
@@ -59,6 +61,7 @@ In each package: `npm test`, `npm run lint`, `npm run typecheck`. Server tests n
 - **Server:** Vitest and supertest against a real PostgreSQL test database. A fake classifier stands in for the LLM, so no test calls Gemini.
 - **Client:** Vitest and React Testing Library.
 - Every business rule below has tests.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs lint, typecheck, tests and the build for the server (against a PostgreSQL service) and the client on every push to `main` and every pull request. A third job builds the whole Docker stack from `.env.example` and runs `scripts/smoke-test.sh` against it: seed data, task creation, and the Done and skill rules through the real nginx proxy. Run the same check locally with `scripts/smoke-test.sh` while the stack is up (needs `curl` and `jq`).
 
 ## System design
 

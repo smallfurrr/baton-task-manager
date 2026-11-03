@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer run for the same branch or pull request replaces one still running.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: baton
+          POSTGRES_PASSWORD: baton_dev_password
+          POSTGRES_DB: baton
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U baton -d baton"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The tests create and migrate their own `baton_test` database next to this one.
+      DATABASE_URL: postgres://baton:baton_dev_password@localhost:5432/baton
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # `docker compose up` on a clean machine is a requirement, so build and boot the whole stack.
+  docker:
+    name: Docker stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use the example environment (no Gemini key, so tasks are simply not auto-tagged)
+        run: cp .env.example .env
+      - name: Build and start the stack
+        run: docker compose up --build -d --wait
+      - name: Smoke test
+        run: scripts/smoke-test.sh http://localhost:8080
+      - name: Show logs if something failed
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
