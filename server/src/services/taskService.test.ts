@@ -11,6 +11,7 @@ import {
 import { resetDatabase } from "../test/db.js";
 import { fakeClassifier } from "../test/fakeClassifier.js";
 import { idOf, taskCount } from "../test/fixtures.js";
+import { chain } from "../test/trees.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
 
 function assignTask(taskId: number, assigneeId: number | null) {
@@ -518,14 +519,6 @@ describe("updateTask: concurrent status changes", () => {
 });
 
 describe("createTask: size limits", () => {
-  type Node = { title: string; skillIds: number[]; subtasks: Node[] };
-
-  function chain(levels: number): Node {
-    let node: Node = { title: "leaf", skillIds: [], subtasks: [] };
-    for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, skillIds: [], subtasks: [node] };
-    return node;
-  }
-
   it("accepts three levels: task, subtask, sub-subtask", async () => {
     await createTask(chain(3));
 

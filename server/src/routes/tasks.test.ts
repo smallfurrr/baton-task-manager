@@ -6,8 +6,12 @@ import { seed } from "../db/seed.js";
 import { resetDatabase } from "../test/db.js";
 import { fakeClassifier } from "../test/fakeClassifier.js";
 import { idOf, insertTask, taskCount } from "../test/fixtures.js";
+import { chain, renderTree } from "../test/trees.js";
 
 const app = createApp();
+
+const post = (body: unknown) => request(app).post("/api/tasks").send(body as object);
+const patch = (id: number, body: object) => request(app).patch(`/api/tasks/${id}`).send(body);
 
 beforeEach(async () => {
   await resetDatabase(getPool());
@@ -291,12 +295,6 @@ describe("PATCH /api/tasks/:id", () => {
 });
 
 describe("subtasks in task responses", () => {
-  /** Compact view of a task tree: "title(child, child(grandchild))" */
-  function render(task: { title: string; subtasks: unknown[] }): string {
-    const children = (task.subtasks as { title: string; subtasks: unknown[] }[]).map(render);
-    return children.length ? `${task.title}(${children.join(", ")})` : task.title;
-  }
-
   it("lists only top-level tasks, with subtasks nested under them", async () => {
     const root = await insertTask("root");
     const child = await insertTask("child", root);
@@ -307,7 +305,7 @@ describe("subtasks in task responses", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.map((t: { title: string }) => t.title)).toEqual(["second root", "root"]);
-    expect(render(res.body[1])).toBe("root(child(grandchild))");
+    expect(renderTree(res.body[1])).toBe("root(child(grandchild))");
   });
 
   it("orders subtasks by creation order, not alphabetically", async () => {
@@ -317,7 +315,7 @@ describe("subtasks in task responses", () => {
 
     const res = await request(app).get("/api/tasks");
 
-    expect(render(res.body[0])).toBe("root(zebra, apple)");
+    expect(renderTree(res.body[0])).toBe("root(zebra, apple)");
   });
 
   it("includes parentId, skills and assignee on nested subtasks", async () => {
@@ -349,7 +347,7 @@ describe("subtasks in task responses", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.parentId).toBeNull();
-    expect(render(res.body)).toBe("root(child(grandchild))");
+    expect(renderTree(res.body)).toBe("root(child(grandchild))");
   });
 
   it("returns a subtask by id with its own subtree, but not its siblings or ancestors", async () => {
@@ -362,7 +360,7 @@ describe("subtasks in task responses", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.parentId).toBe(root);
-    expect(render(res.body)).toBe("first(under first)");
+    expect(renderTree(res.body)).toBe("first(under first)");
   });
 
   it("includes the subtree in the response to a status change", async () => {
@@ -372,7 +370,7 @@ describe("subtasks in task responses", () => {
     const res = await request(app).patch(`/api/tasks/${root}`).send({ status: "in_progress" });
 
     expect(res.status).toBe(200);
-    expect(render(res.body)).toBe("root(child)");
+    expect(renderTree(res.body)).toBe("root(child)");
   });
 
   it("updates a subtask by its own id", async () => {
@@ -387,22 +385,6 @@ describe("subtasks in task responses", () => {
 });
 
 describe("POST /api/tasks with subtasks", () => {
-  type NodeInput = { title: string; skillIds?: number[]; subtasks?: NodeInput[] };
-
-  /** Compact view of a task tree: "title(child, child(grandchild))" */
-  function render(task: { title: string; subtasks: unknown[] }): string {
-    const children = (task.subtasks as { title: string; subtasks: unknown[] }[]).map(render);
-    return children.length ? `${task.title}(${children.join(", ")})` : task.title;
-  }
-
-  const post = (body: unknown) => request(app).post("/api/tasks").send(body as object);
-
-  function chain(levels: number): NodeInput {
-    let node: NodeInput = { title: "leaf" };
-    for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, subtasks: [node] };
-    return node;
-  }
-
   it("creates a task with nested subtasks in one request", async () => {
     const res = await post({
       title: "root",
@@ -410,7 +392,7 @@ describe("POST /api/tasks with subtasks", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(render(res.body)).toBe("root(a(a1, a2), b)");
+    expect(renderTree(res.body)).toBe("root(a(a1, a2), b)");
     expect(await taskCount()).toBe(5);
   });
 
@@ -447,9 +429,9 @@ describe("POST /api/tasks with subtasks", () => {
   it("keeps subtasks in the order given", async () => {
     const res = await post({ title: "root", subtasks: [{ title: "zebra" }, { title: "apple" }, { title: "mango" }] });
 
-    expect(render(res.body)).toBe("root(zebra, apple, mango)");
+    expect(renderTree(res.body)).toBe("root(zebra, apple, mango)");
     const fetched = await request(app).get(`/api/tasks/${res.body.id}`);
-    expect(render(fetched.body)).toBe("root(zebra, apple, mango)");
+    expect(renderTree(fetched.body)).toBe("root(zebra, apple, mango)");
   });
 
   it("returns the same tree on a later read", async () => {
@@ -471,7 +453,7 @@ describe("POST /api/tasks with subtasks", () => {
   it("trims every title in the tree", async () => {
     const res = await post({ title: "  root  ", subtasks: [{ title: "  child  " }] });
 
-    expect(render(res.body)).toBe("root(child)");
+    expect(renderTree(res.body)).toBe("root(child)");
   });
 
   it("returns 422 and saves nothing when a deep subtask has an unknown skill", async () => {
@@ -552,9 +534,6 @@ describe("POST /api/tasks with subtasks", () => {
 });
 
 describe("PATCH /api/tasks/:id: Done rule", () => {
-  const post = (body: object) => request(app).post("/api/tasks").send(body);
-  const patch = (id: number, body: object) => request(app).patch(`/api/tasks/${id}`).send(body);
-
   it("returns 409 INCOMPLETE_SUBTASKS listing what is still open, and leaves the task unchanged", async () => {
     const root = (await post({ title: "root", subtasks: [{ title: "Write tests" }, { title: "Deploy" }] })).body;
 
@@ -629,9 +608,6 @@ describe("PATCH /api/tasks/:id: Done rule", () => {
 });
 
 describe("PATCH /api/tasks/:id: reopening Done ancestors", () => {
-  const post = (body: object) => request(app).post("/api/tasks").send(body);
-  const patch = (id: number, body: object) => request(app).patch(`/api/tasks/${id}`).send(body);
-
   it("reopens a Done parent when a subtask is reopened, and the list shows it", async () => {
     const root = (await post({ title: "root", subtasks: [{ title: "child" }] })).body;
     const child = root.subtasks[0];
