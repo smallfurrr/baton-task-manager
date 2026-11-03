@@ -4,13 +4,9 @@ import { createApp } from "../app.js";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import { resetDatabase } from "../test/db.js";
+import { idOf } from "../test/fixtures.js";
 
 const app = createApp();
-
-async function skillId(name: string): Promise<number> {
-  const { rows } = await getPool().query<{ id: number }>("SELECT id FROM skills WHERE name = $1", [name]);
-  return rows[0]!.id;
-}
 
 beforeEach(async () => {
   await resetDatabase(getPool());
@@ -33,7 +29,7 @@ describe("GET /api/skills", () => {
 
 describe("GET /api/skills/:id", () => {
   it("returns the skill with the developers who have it", async () => {
-    const res = await request(app).get(`/api/skills/${await skillId("Frontend")}`);
+    const res = await request(app).get(`/api/skills/${await idOf("skills", "Frontend")}`);
 
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("Frontend");

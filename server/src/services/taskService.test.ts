@@ -10,12 +10,8 @@ import {
 } from "../errors.js";
 import { resetDatabase } from "../test/db.js";
 import { fakeClassifier } from "../test/fakeClassifier.js";
+import { idOf, taskCount } from "../test/fixtures.js";
 import { createTask, getTask, updateTask } from "./taskService.js";
-
-async function idOf(table: "skills" | "developers", name: string): Promise<number> {
-  const { rows } = await getPool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1`, [name]);
-  return rows[0]!.id;
-}
 
 function assignTask(taskId: number, assigneeId: number | null) {
   return updateTask(taskId, { assigneeId });
@@ -528,11 +524,6 @@ describe("createTask: size limits", () => {
     let node: Node = { title: "leaf", skillIds: [], subtasks: [] };
     for (let level = 1; level < levels; level++) node = { title: `level ${levels - level}`, skillIds: [], subtasks: [node] };
     return node;
-  }
-
-  async function taskCount(): Promise<number> {
-    const { rows } = await getPool().query<{ n: number }>("SELECT count(*)::int AS n FROM tasks");
-    return rows[0]!.n;
   }
 
   it("accepts three levels: task, subtask, sub-subtask", async () => {

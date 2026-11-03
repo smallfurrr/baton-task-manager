@@ -4,13 +4,9 @@ import { createApp } from "../app.js";
 import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import { resetDatabase } from "../test/db.js";
+import { idOf } from "../test/fixtures.js";
 
 const app = createApp();
-
-async function developerId(name: string): Promise<number> {
-  const { rows } = await getPool().query<{ id: number }>("SELECT id FROM developers WHERE name = $1", [name]);
-  return rows[0]!.id;
-}
 
 beforeEach(async () => {
   await resetDatabase(getPool());
@@ -45,7 +41,7 @@ describe("GET /api/developers", () => {
 
 describe("GET /api/developers/:id", () => {
   it("returns the developer with skills and assigned tasks", async () => {
-    const carol = await developerId("Carol");
+    const carol = await idOf("developers", "Carol");
     await getPool().query("INSERT INTO tasks (title, assignee_id) VALUES ('Build profile page', $1)", [carol]);
     await getPool().query("INSERT INTO tasks (title) VALUES ('Unassigned task')");
 

@@ -5,18 +5,9 @@ import { closePool, getPool } from "../db/pool.js";
 import { seed } from "../db/seed.js";
 import { resetDatabase } from "../test/db.js";
 import { fakeClassifier } from "../test/fakeClassifier.js";
+import { idOf, insertTask, taskCount } from "../test/fixtures.js";
 
 const app = createApp();
-
-async function idOf(table: "skills" | "developers", name: string): Promise<number> {
-  const { rows } = await getPool().query<{ id: number }>(`SELECT id FROM ${table} WHERE name = $1`, [name]);
-  return rows[0]!.id;
-}
-
-async function taskCount(): Promise<number> {
-  const { rows } = await getPool().query<{ n: string }>("SELECT count(*) AS n FROM tasks");
-  return Number(rows[0]!.n);
-}
 
 beforeEach(async () => {
   await resetDatabase(getPool());
@@ -300,14 +291,6 @@ describe("PATCH /api/tasks/:id", () => {
 });
 
 describe("subtasks in task responses", () => {
-  async function insertTask(title: string, parentId: number | null = null): Promise<number> {
-    const { rows } = await getPool().query<{ id: number }>(
-      "INSERT INTO tasks (title, parent_id) VALUES ($1, $2) RETURNING id",
-      [title, parentId],
-    );
-    return rows[0]!.id;
-  }
-
   /** Compact view of a task tree: "title(child, child(grandchild))" */
   function render(task: { title: string; subtasks: unknown[] }): string {
     const children = (task.subtasks as { title: string; subtasks: unknown[] }[]).map(render);

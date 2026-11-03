@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { TASK_STATUSES } from "../domain/task.js";
 import { closePool, getPool } from "./pool.js";
 import { assertTestDatabase, resetDatabase } from "../test/db.js";
+import { insertTask } from "../test/fixtures.js";
 
 const UNIQUE_VIOLATION = "23505";
 const CHECK_VIOLATION = "23514";
@@ -101,10 +102,6 @@ describe("schema constraints", () => {
 });
 
 describe("subtasks (parent_id)", () => {
-  async function insertTask(title: string, parentId: number | null = null): Promise<number> {
-    return insertId("INSERT INTO tasks (title, parent_id) VALUES ($1, $2)", [title, parentId]);
-  }
-
   async function titles(): Promise<string[]> {
     const { rows } = await pool.query<{ title: string }>("SELECT title FROM tasks ORDER BY id");
     return rows.map((row) => row.title);
