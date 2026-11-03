@@ -135,17 +135,17 @@ curl -X POST localhost:8080/api/tasks -H 'content-type: application/json' -d '{
 ```json
 {
   "id": 9, "parentId": null, "title": "Add audit logging", "status": "todo",
-  "assignee": null, "skills": [{ "id": 2, "name": "Backend" }],
+  "assignee": null, "skills": [{ "id": 2, "name": "Backend", "addedByAi": false }],
   "createdAt": "…", "updatedAt": "…",
   "subtasks": [
     { "id": 10, "parentId": 9, "title": "Write the log table migration", "status": "todo",
-      "assignee": null, "skills": [{ "id": 2, "name": "Backend" }], "subtasks": [],
+      "assignee": null, "skills": [{ "id": 2, "name": "Backend", "addedByAi": true }], "subtasks": [],
       "createdAt": "…", "updatedAt": "…" }
   ]
 }
 ```
 
-Subtasks without `skillIds` are tagged automatically. To assign and update: `PATCH /api/tasks/9` with `{ "assigneeId": 3, "status": "in_progress" }`.
+Subtasks without `skillIds` are tagged automatically, and those skills have `addedByAi: true`. To assign and update: `PATCH /api/tasks/9` with `{ "assigneeId": 3, "status": "in_progress" }`.
 
 Errors share one shape:
 
