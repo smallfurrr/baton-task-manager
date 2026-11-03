@@ -1,12 +1,13 @@
 import { getPool, withTransaction } from "../db/pool.js";
 import type { TaskStatus } from "../domain/task.js";
 import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
+import { mapWithConcurrency } from "../lib/concurrency.js";
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
 import * as skills from "../repositories/skillRepository.js";
 import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
-import { CLASSIFIER_CONCURRENCY, mapWithConcurrency, tagSkills } from "./skillTagging.js";
+import { CLASSIFIER_CONCURRENCY, tagSkills } from "./skillTagging.js";
 import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
