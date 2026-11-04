@@ -606,6 +606,22 @@ describe("createTask: skill tagging", () => {
     expect(skillNames(task.subtasks[0]!)).toEqual(["Frontend"]);
   });
 
+  it("saves every task, untagged, when the classifier keeps failing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const titles = Array.from({ length: 12 }, (_, i) => `Task ${i}`);
+    const classifier = fakeClassifier(Object.fromEntries(titles.map((title) => [title, new Error("down")])));
+
+    const created = await createTask(
+      { title: "Root", skillIds: [], subtasks: titles.map((title) => ({ title, skillIds: [] })) },
+      classifier,
+    );
+
+    expect(created.subtasks).toHaveLength(12);
+    expect(created.subtasks.every((subtask) => subtask.skills.length === 0)).toBe(true);
+    // The breaker stopped the calls well short of one per task.
+    expect(classifier.calls.length).toBeLessThan(13);
+  });
+
   it("ignores suggestions that are not known skills", async () => {
     const classifier = fakeClassifier({ Odd: ["DevOps", "backend"] });
 

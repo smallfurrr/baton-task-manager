@@ -1,13 +1,12 @@
 import { getPool, withTransaction } from "../db/pool.js";
 import type { TaskStatus } from "../domain/task.js";
 import { IncompleteSubtasksError, InvalidReferenceError, NotFoundError, SkillMismatchError } from "../errors.js";
-import { mapWithConcurrency } from "../lib/concurrency.js";
 import * as developers from "../repositories/developerRepository.js";
 import * as tasks from "../repositories/taskRepository.js";
 import { missingSkills } from "./assignment.js";
 import * as skills from "../repositories/skillRepository.js";
 import { noopSkillClassifier, type SkillClassifier } from "./skillClassifier.js";
-import { CLASSIFIER_CONCURRENCY, tagSkills } from "./skillTagging.js";
+import { tagTitles } from "./skillTagging.js";
 import { checkTreeLimits } from "./taskLimits.js";
 import { nestTasks, type Task } from "./taskTree.js";
 
@@ -49,9 +48,7 @@ async function planTasks(input: CreateTaskInput, classifier: SkillClassifier): P
 
   const suggestions = new Map<CreateTaskInput, number[]>();
   if (known.length > 0) {
-    const results = await mapWithConcurrency(untagged, CLASSIFIER_CONCURRENCY, (node) =>
-      tagSkills(node.title, known, classifier),
-    );
+    const results = await tagTitles(untagged.map((node) => node.title), known, classifier);
     untagged.forEach((node, i) => suggestions.set(node, results[i] ?? []));
   }
 

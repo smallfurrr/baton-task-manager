@@ -110,6 +110,7 @@ These live in `server/src/services`.
 - One Gemini call per task, 5 at a time, 8-second timeout.
 - The prompt lists the skills from the database. The answer must be a JSON array of those names, and is checked again afterwards.
 - If a call fails, the error is logged and the task is saved without skills.
+- After 3 failed calls in a row, the rest of that request is saved untagged without further calls, so an outage costs a few seconds rather than minutes. The next request tries Gemini again.
 - Tasks with chosen skills are never classified.
 
 **Client.** React and Vite, with React Router for the two pages and TanStack Query for data. API calls live in `api/` and `hooks/`, not in components. The server returns subtasks nested, so the list just renders the tree. The create form holds one immutable tree (`lib/taskFormTree.ts`) and sends it in a single request.
